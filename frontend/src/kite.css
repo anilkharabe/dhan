@@ -1,0 +1,731 @@
+/* ============================================================
+   Kite Trading Terminal — Dark Theme Stylesheet
+   ============================================================ */
+
+:root {
+  --kite-bg: #1b1b2f;
+  --kite-panel: #162447;
+  --kite-panel-alt: #1a1a3e;
+  --kite-border: #2a2a5a;
+  --kite-border-light: #353570;
+  --kite-text: #e0e0e0;
+  --kite-text-dim: #8888ab;
+  --kite-text-muted: #5a5a8a;
+  --kite-accent: #387eff;
+  --kite-accent-hover: #5a9aff;
+  --kite-green: #26a69a;
+  --kite-green-bg: rgba(38, 166, 154, 0.08);
+  --kite-red: #ef5350;
+  --kite-red-bg: rgba(239, 83, 80, 0.08);
+  --kite-yellow: #ffb74d;
+  --kite-nav-bg: #0f0f23;
+  --kite-status-bg: #0d0d1f;
+  --kite-hover: rgba(56, 126, 255, 0.06);
+  --kite-row-hover: rgba(255, 255, 255, 0.03);
+}
+
+/* ---- Full-Screen Shell ---- */
+.kite-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background: var(--kite-bg);
+  color: var(--kite-text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+}
+
+/* ---- Nav Bar ---- */
+.kite-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  min-height: 48px;
+  background: var(--kite-nav-bg);
+  border-bottom: 1px solid var(--kite-border);
+  padding: 0 16px;
+  z-index: 100;
+}
+
+.kite-nav__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kite-nav__logo {
+  font-size: 16px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #387eff, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.5px;
+}
+
+.kite-nav__badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--kite-accent);
+  color: #fff;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.kite-nav__tickers {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.kite-nav__ticker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.kite-nav__ticker:hover {
+  background: var(--kite-hover);
+}
+
+.kite-nav__ticker-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--kite-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kite-nav__ticker-price {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--kite-text);
+}
+
+.kite-nav__ticker-change {
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.kite-nav__ticker-change.up {
+  color: var(--kite-green);
+}
+
+.kite-nav__ticker-change.down {
+  color: var(--kite-red);
+}
+
+.kite-nav__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kite-nav__link {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--kite-text-dim);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+
+.kite-nav__link:hover {
+  color: var(--kite-text);
+  background: var(--kite-hover);
+  border-color: var(--kite-border);
+}
+
+.kite-nav__conn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+
+.kite-nav__conn.live {
+  background: rgba(38, 166, 154, 0.12);
+  color: var(--kite-green);
+  border: 1px solid rgba(38, 166, 154, 0.25);
+}
+
+.kite-nav__conn.off {
+  background: rgba(239, 83, 80, 0.12);
+  color: var(--kite-red);
+  border: 1px solid rgba(239, 83, 80, 0.25);
+}
+
+.kite-nav__conn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.kite-nav__conn.live .kite-nav__conn-dot {
+  background: var(--kite-green);
+  animation: pulse-dot 2s infinite;
+}
+
+.kite-nav__conn.off .kite-nav__conn-dot {
+  background: var(--kite-red);
+}
+
+@keyframes pulse-dot {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ---- Main Content Area ---- */
+.kite-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ---- Watchlist (Left Panel) ---- */
+.kite-watchlist {
+  width: 280px;
+  min-width: 280px;
+  background: var(--kite-panel);
+  border-right: 1px solid var(--kite-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.kite-watchlist__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--kite-border);
+  background: var(--kite-nav-bg);
+}
+
+.kite-watchlist__title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--kite-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.kite-watchlist__count {
+  font-size: 10px;
+  color: var(--kite-text-muted);
+  font-weight: 600;
+}
+
+.kite-watchlist__list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.kite-watchlist__group-label {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--kite-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  padding: 10px 14px 4px;
+}
+
+.kite-watchlist__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(42, 42, 90, 0.3);
+  transition: background 0.12s;
+  position: relative;
+}
+
+.kite-watchlist__row:hover {
+  background: var(--kite-row-hover);
+}
+
+.kite-watchlist__row.active {
+  background: var(--kite-hover);
+  border-left: 3px solid var(--kite-accent);
+}
+
+.kite-watchlist__row-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kite-watchlist__symbol {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--kite-text);
+}
+
+.kite-watchlist__type-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  display: inline-block;
+  width: fit-content;
+}
+
+.kite-watchlist__type-badge.ce {
+  background: var(--kite-green-bg);
+  color: var(--kite-green);
+  border: 1px solid rgba(38, 166, 154, 0.2);
+}
+
+.kite-watchlist__type-badge.pe {
+  background: var(--kite-red-bg);
+  color: var(--kite-red);
+  border: 1px solid rgba(239, 83, 80, 0.2);
+}
+
+.kite-watchlist__type-badge.index {
+  background: rgba(56, 126, 255, 0.08);
+  color: var(--kite-accent);
+  border: 1px solid rgba(56, 126, 255, 0.2);
+}
+
+.kite-watchlist__row-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.kite-watchlist__price {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.kite-watchlist__change {
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.kite-watchlist__price.up,
+.kite-watchlist__change.up {
+  color: var(--kite-green);
+}
+
+.kite-watchlist__price.down,
+.kite-watchlist__change.down {
+  color: var(--kite-red);
+}
+
+.kite-watchlist__price.flash-up {
+  animation: flash-green 0.5s ease-out;
+}
+
+.kite-watchlist__price.flash-down {
+  animation: flash-red 0.5s ease-out;
+}
+
+@keyframes flash-green {
+  0% {
+    background: rgba(38, 166, 154, 0.3);
+  }
+
+  100% {
+    background: transparent;
+  }
+}
+
+@keyframes flash-red {
+  0% {
+    background: rgba(239, 83, 80, 0.3);
+  }
+
+  100% {
+    background: transparent;
+  }
+}
+
+/* Hover overlay buttons */
+.kite-watchlist__actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  gap: 4px;
+}
+
+.kite-watchlist__row:hover .kite-watchlist__actions {
+  display: flex;
+}
+
+.kite-watchlist__row:hover .kite-watchlist__row-right {
+  opacity: 0;
+}
+
+.kite-watchlist__action-btn {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kite-watchlist__action-btn.buy {
+  background: var(--kite-accent);
+  color: #fff;
+}
+
+.kite-watchlist__action-btn.sell {
+  background: var(--kite-red);
+  color: #fff;
+}
+
+/* ---- Right Content (Chart + Order Book) ---- */
+.kite-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--kite-bg);
+}
+
+/* ---- Chart Panel ---- */
+.kite-chart {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.kite-chart__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--kite-border);
+  background: var(--kite-panel);
+  gap: 12px;
+  min-height: 40px;
+  flex-shrink: 0;
+}
+
+.kite-chart__instrument {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kite-chart__symbol-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--kite-text);
+}
+
+.kite-chart__live-price {
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.kite-chart__live-change {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.kite-chart__timeframes {
+  display: flex;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px;
+  border-radius: 6px;
+}
+
+.kite-chart__tf-btn {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  color: var(--kite-text-dim);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.kite-chart__tf-btn:hover {
+  color: var(--kite-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.kite-chart__tf-btn.active {
+  background: var(--kite-accent);
+  color: #fff;
+}
+
+.kite-chart__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  position: relative;
+}
+
+/* ---- Order Book (Bottom Panel) ---- */
+.kite-orderbook {
+  height: 160px;
+  min-height: 100px;
+  background: var(--kite-panel);
+  border-top: 1px solid var(--kite-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.kite-orderbook__tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid var(--kite-border);
+  background: var(--kite-nav-bg);
+  padding: 0 12px;
+}
+
+.kite-orderbook__tab {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--kite-text-dim);
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.kite-orderbook__tab:hover {
+  color: var(--kite-text);
+}
+
+.kite-orderbook__tab.active {
+  color: var(--kite-accent);
+  border-bottom-color: var(--kite-accent);
+}
+
+.kite-orderbook__tab-count {
+  font-size: 9px;
+  font-weight: 800;
+  background: var(--kite-accent);
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 8px;
+  margin-left: 6px;
+}
+
+.kite-orderbook__content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Order Book Table */
+.kite-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.kite-table th {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--kite-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 12px;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.15);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid var(--kite-border);
+}
+
+.kite-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(42, 42, 90, 0.2);
+  font-variant-numeric: tabular-nums;
+  color: var(--kite-text);
+}
+
+.kite-table tr:hover td {
+  background: var(--kite-row-hover);
+}
+
+.kite-table .pnl-positive {
+  color: var(--kite-green);
+  font-weight: 700;
+}
+
+.kite-table .pnl-negative {
+  color: var(--kite-red);
+  font-weight: 700;
+}
+
+/* ---- Status Bar ---- */
+.kite-status {
+  height: 24px;
+  min-height: 24px;
+  background: var(--kite-status-bg);
+  border-top: 1px solid var(--kite-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 10px;
+  color: var(--kite-text-muted);
+}
+
+.kite-status__left,
+.kite-status__right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.kite-status__item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kite-status__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.kite-status__dot.green {
+  background: var(--kite-green);
+}
+
+.kite-status__dot.red {
+  background: var(--kite-red);
+}
+
+.kite-status__dot.yellow {
+  background: var(--kite-yellow);
+}
+
+/* ---- Summary Panel ---- */
+.kite-summary {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.kite-summary__card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--kite-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.kite-summary__label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--kite-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.kite-summary__value {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.kite-summary__sub {
+  font-size: 10px;
+  color: var(--kite-text-dim);
+  margin-top: 2px;
+}
+
+/* ---- Empty States ---- */
+.kite-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  color: var(--kite-text-muted);
+  font-size: 12px;
+  gap: 8px;
+}
+
+.kite-empty__icon {
+  font-size: 24px;
+  opacity: 0.3;
+}
+
+/* ---- Kite Scrollbar ---- */
+.kite-shell ::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.kite-shell ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kite-shell ::-webkit-scrollbar-thumb {
+  background: var(--kite-border);
+  border-radius: 10px;
+}
+
+.kite-shell ::-webkit-scrollbar-thumb:hover {
+  background: var(--kite-border-light);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .kite-watchlist {
+    display: none;
+  }
+
+  .kite-nav__tickers {
+    gap: 12px;
+  }
+}

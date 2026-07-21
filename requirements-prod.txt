@@ -1,0 +1,8 @@
+# Extra dependency for the Linux/AWS deployment only - gunicorn needs
+# os.fork(), which doesn't exist on Windows, so it's kept out of the shared
+# requirements.txt used for local Windows dev.
+#
+# Install on the deployment server with:
+#   pip install -r requirements.txt -r requirements-prod.txt
+-r requirements.txt
+gunicorn>=21.2.0

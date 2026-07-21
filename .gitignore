@@ -1,0 +1,35 @@
+# Secrets - never commit
+.env
+.env.production
+*.env
+!.env.example
+!.env.production.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Generated data / logs
+backend/logs/
+backend/charts/
+backend/trade_logs/
+backend/dhan_instruments_cache.csv
+backend/.dhan_token_timestamp
+system_state.json
+*.log
+
+# Local Claude Code state
+.claude/
+
+# Scratch/cleanup folder used during development
+_trash/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Editor
+.vscode/
+.idea/
