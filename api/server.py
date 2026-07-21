@@ -393,11 +393,13 @@ def get_historical_candles():
             # Check if we need to append a forming candle (for live trading)
             # Get latest price from WebSocket if available
             last_candle_time = df.index[-1]
-            # Ensure current_time is timezone compatible with last_candle_time
+            # current_time must be naive-but-IST-wall-clock to compare against
+            # last_candle_time (same convention as ts_epoch below) - datetime.now()
+            # would silently depend on the server's system timezone matching IST.
             if last_candle_time.tzinfo:
                 current_time = datetime.now(last_candle_time.tzinfo)
             else:
-                current_time = datetime.now()
+                current_time = pd.Timestamp.now(tz='Asia/Kolkata').tz_localize(None).to_pydatetime()
             
             # If the last candle is old (more than 1 minute ago), try to append latest price
             if (current_time - last_candle_time).total_seconds() > 60:
@@ -454,12 +456,18 @@ def get_historical_candles():
                  if last_ts.tzinfo:
                      current_ts = datetime.now(last_ts.tzinfo)
                  else:
-                     current_ts = datetime.now()
-                 
+                     current_ts = pd.Timestamp.now(tz='Asia/Kolkata').tz_localize(None).to_pydatetime()
+
                  # Logic for 1-minute candles
                  # If current time minute > last candle minute, we have a gap
                  if current_ts.minute != last_ts.minute or current_ts.hour != last_ts.hour or current_ts.day != last_ts.day:
-                     forming_ts = int(current_ts.timestamp())
+                     # Same UTC-assumes-naive pitfall as ts_epoch above: localize
+                     # explicitly instead of relying on datetime.timestamp()'s
+                     # system-timezone assumption.
+                     if last_ts.tzinfo:
+                         forming_ts = int(current_ts.timestamp())
+                     else:
+                         forming_ts = int(pd.Timestamp(current_ts).tz_localize('Asia/Kolkata').timestamp())
                      # Snap to minute
                      forming_ts = forming_ts - (forming_ts % 60)
                      
