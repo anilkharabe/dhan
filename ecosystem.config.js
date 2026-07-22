@@ -19,6 +19,19 @@ module.exports = {
             instances: 1,
             exec_mode: "fork",
             autorestart: true,
+            // main.py exits cleanly (not an error) once it finishes its
+            // after-hours post-market-analysis pass, or after the EOD
+            // routine on a normal trading day - both are expected exits,
+            // not crashes. Without a backoff, autorestart:true relaunches
+            // it instantly forever, spinning at 100% CPU (confirmed: 5000+
+            // restarts/hour on this box). Exponential backoff + a restart
+            // cap means one bad day self-limits instead of burning CPU
+            // until someone notices; the daily 9am cron's `startOrRestart`
+            // still works fine on top of this (manual start isn't affected
+            // by the backoff/cap, only PM2's own autorestart-after-exit is).
+            min_uptime: "30s",
+            max_restarts: 15,
+            exp_backoff_restart_delay: 3000,
             watch: [".env"], // restart on .env changes (e.g. Dhan token refresh)
             ignore_watch: ["logs/*", "data/*", "*.log"],
             env: {
