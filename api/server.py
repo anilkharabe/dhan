@@ -33,6 +33,7 @@ from dhan_api import dhan_client
 from indicators import Indicators
 from mongo_logger import mongo_logger
 from dhan_token_manager import dhan_token_manager
+import trend_scanner
 
 app = Flask(__name__)
 # CORS_ALLOWED_ORIGINS: comma-separated list of allowed frontend origins in
@@ -776,6 +777,35 @@ def get_oi_pcr():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/scanner/trend', methods=['GET'])
+def get_trend_scanner():
+    """Full-day (9:15-15:30) OI/PCR + VWAP history table for one symbol at a
+    time (NIFTY/SENSEX/BANKNIFTY), at 5-min or 15-min spacing. Informational
+    only - does not feed the credit-spread entry gate. See
+    backend/trend_scanner.py. Non-blocking: on a cache miss/expiry this kicks
+    off the (30s-4min) reconstruction in a background thread and returns
+    `{"status": "building"}` immediately - the frontend polls this same
+    endpoint every few seconds until `{"status": "ready", "rows": [...]}`
+    comes back. Deliberately NOT held open for the full rebuild duration:
+    a request that long would occupy one of the browser's ~6 per-origin
+    HTTP/1.1 connection slots for minutes, starving unrelated polling (e.g.
+    TokenStatus) - confirmed live 2026-07-22."""
+    symbol = request.args.get('symbol', 'NIFTY').upper()
+    timeframe = request.args.get('timeframe', '15min')
+
+    if symbol not in trend_scanner.SYMBOLS:
+        return jsonify({"error": f"Unknown symbol: {symbol}"}), 400
+    if timeframe not in trend_scanner.TIMEFRAMES:
+        return jsonify({"error": f"timeframe must be one of {list(trend_scanner.TIMEFRAMES)}"}), 400
+
+    try:
+        result = trend_scanner.get_symbol_history(symbol, timeframe)
+        if result is None:
+            return jsonify({"symbol": symbol, "timeframe": timeframe, "rows": [], "message": "No data available yet"})
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/summary/today', methods=['GET'])
 def get_daily_summary():
     """Get today's trading summary"""
@@ -1057,6 +1087,7 @@ if __name__ == '__main__':
     print("  GET /api/ws-subscribe?instruments=KEY1,KEY2  (SSE stream)")
     print("  GET /api/latest-ticks")
     print("  GET /api/metrics/oi-pcr")
+    print("  GET /api/scanner/trend")
     print("  GET /api/summary/today")
     print("  GET /api/health")
     print("\nPress Ctrl+C to stop")

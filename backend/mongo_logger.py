@@ -40,6 +40,9 @@ class MongoDataLogger:
             self.index_1min_candles = self.db['index_1min_candles']
             self.candle_fetch_log = self.db['candle_fetch_log']
 
+            # Trend Scanner's full-day OI/VWAP reconstruction (backend/trend_scanner.py)
+            self.scanner_snapshots = self.db['scanner_snapshots']
+
             # Test connection
             self.client.server_info()
 
@@ -51,6 +54,10 @@ class MongoDataLogger:
             self.index_1min_candles.create_index(
                 [('symbol', 1), ('timestamp', 1)],
                 unique=True, background=True, name='index_candle_unique'
+            )
+            self.scanner_snapshots.create_index(
+                [('symbol', 1), ('date', 1)],
+                unique=True, background=True, name='scanner_snapshot_unique'
             )
             
             logger.info(f"✅ MongoDB connected: {self.db_name}")
@@ -575,6 +582,49 @@ class MongoDataLogger:
         except Exception as e:
             logger.error(f"Error getting OI PCR history: {str(e)}")
             return []
+
+    def save_scanner_snapshot(self, symbol: str, date_str: str, minutes: List[Dict]):
+        """
+        Persist a Trend Scanner full-day OI/VWAP reconstruction (backend/trend_scanner.py).
+        One document per symbol+date, wholesale-overwritten on each successful
+        rebuild (not an incremental append) - so a server restart can load
+        today's last-known state instantly instead of redoing the full
+        ~30s-4min live Dhan reconstruction from scratch.
+
+        Args:
+            symbol: "NIFTY"/"SENSEX"/"BANKNIFTY"
+            date_str: "YYYY-MM-DD"
+            minutes: list of {'time': <UTC datetime>, 'call_oi': float,
+                'put_oi': float, 'close': float, 'vwap': float} - one per minute
+        """
+        if not self.enabled:
+            return
+
+        try:
+            self.scanner_snapshots.update_one(
+                {'symbol': symbol, 'date': date_str},
+                {'$set': {'minutes': minutes, 'updated_at': datetime.utcnow()}},
+                upsert=True
+            )
+        except Exception as e:
+            logger.error(f"Error saving scanner snapshot for {symbol}: {str(e)}")
+
+    def get_scanner_snapshot(self, symbol: str, date_str: str) -> Optional[Dict]:
+        """
+        Returns {'minutes': [...], 'updated_at': <naive UTC datetime>} for the
+        given symbol+date, or None if nothing has been persisted yet today.
+        """
+        if not self.enabled:
+            return None
+
+        try:
+            return self.scanner_snapshots.find_one(
+                {'symbol': symbol, 'date': date_str},
+                {'_id': 0, 'minutes': 1, 'updated_at': 1}
+            )
+        except Exception as e:
+            logger.error(f"Error loading scanner snapshot for {symbol}: {str(e)}")
+            return None
 
     def get_trades_for_day(self, date_str: str = None) -> List[Dict]:
         """

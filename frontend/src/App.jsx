@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import Performance from './pages/Performance';
 import KiteTradingPage from './pages/KiteTradingPage';
 import Backtest from './pages/Backtest';
+import Scanner from './pages/Scanner';
 import './App.css';
 
 function AppContent() {
@@ -25,6 +26,7 @@ function AppContent() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/performance" element={<Performance />} />
         <Route path="/backtest" element={<Backtest />} />
+        <Route path="/scanner" element={<Scanner />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

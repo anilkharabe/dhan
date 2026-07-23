@@ -105,11 +105,11 @@ class Indicators:
     def calculate_adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
         """
         Calculate ADX (Average Directional Index)
-        
+
         Args:
             df: DataFrame with 'high', 'low', 'close' columns
             period: ADX period (default 14)
-        
+
         Returns:
             Series with ADX values
         """
@@ -187,9 +187,9 @@ class Indicators:
             
             # ADX is smoothed DX
             adx = wilder_smooth(dx, period)
-            
+
             return adx
-            
+
         except Exception as e:
             logger.error(f"Error calculating ADX: {str(e)}")
             return pd.Series([np.nan] * len(df))

@@ -43,6 +43,15 @@ const Layout = ({ children }) => {
                                 📊 Backtesting
                             </Link>
                             <Link
+                                to="/scanner"
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive('/scanner')
+                                    ? 'bg-emerald-50 text-emerald-600'
+                                    : 'text-gray-600 hover:bg-gray-50'
+                                    }`}
+                            >
+                                📈 Scanner
+                            </Link>
+                            <Link
                                 to="/kite"
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive('/kite')
                                     ? 'bg-indigo-50 text-indigo-600'

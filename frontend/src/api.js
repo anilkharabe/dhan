@@ -30,6 +30,12 @@ export const apiService = {
     return response.data;
   },
 
+  // Get full-day OI/PCR + VWAP history table for one symbol (NIFTY/BANKNIFTY/SENSEX)
+  getTrendScanner: async (symbol, timeframe) => {
+    const response = await api.get('/api/scanner/trend', { params: { symbol, timeframe } });
+    return response.data;
+  },
+
   // Get daily summary
   getDailySummary: async () => {
     const response = await api.get('/api/summary/today');

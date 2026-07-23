@@ -56,8 +56,13 @@ if __name__ == "__main__":
     print("  GET /api/profile")
     print("  GET /api/current-positions")
     print("  GET /api/metrics/oi-pcr")
+    print("  GET /api/scanner/trend")
     print("  GET /api/summary/today")
     print("  GET /api/health")
     print("\nPress Ctrl+C to stop")
     debug_mode = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-    app.run(host="0.0.0.0", port=PORT, debug=debug_mode)
+    # threaded=True so a slow request (e.g. /api/scanner/trend's full-day
+    # option-chain reconstruction, which can take minutes) doesn't block every
+    # other endpoint - matches server.py's own __main__ entry point, which
+    # already runs threaded.
+    app.run(host="0.0.0.0", port=PORT, debug=debug_mode, threaded=True)
