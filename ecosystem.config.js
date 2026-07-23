@@ -41,6 +41,14 @@ module.exports = {
         {
             name: "algo-api",
             script: "./.venv/bin/gunicorn",
+            // interpreter: "none" - without this, PM2 defaults to running
+            // unrecognized script types through Node's module loader, which
+            // feeds this Python venv shebang script to Node as if it were
+            // JS ("SyntaxError: Unexpected identifier 'gunicorn'") and
+            // crash-loops forever. "none" makes PM2 exec the script
+            // directly so its own shebang (#!.venv/bin/python3) is used.
+            // Confirmed live during the 2026-07-23 server rebuild.
+            interpreter: "none",
             // --workers must stay 1 - see wsgi.py docstring: server.py holds
             // in-process WebSocket/tick-queue state that can only safely
             // exist in one process. --threads handles concurrency instead.
