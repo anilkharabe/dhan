@@ -281,6 +281,19 @@ class SupertrendStrategy:
             logger.error(f"[Supertrend] Error checking SL/target for {symbol}: {str(e)}")
 
     def check_trend_flip_exit(self, symbol: str, closed_candle):
+        """
+        Exit only on an actual trend REVERSAL, not continuation. In an uptrend
+        the Supertrend line sits below price (support); a short PE exits when
+        price closes BELOW it (support breaking = trend reversing down).
+        Mirrored for a downtrend/short CE (resistance breaking = reversing up).
+
+        NOTE: this is the opposite of close_price > supertrend_value for the
+        'up' case - that condition is true on almost every candle during a
+        stable uptrend (price naturally sits above its own support line),
+        which caused positions to exit within one candle of entry almost
+        every time - caught via a local replay against real historical spot
+        data before this ever ran live. Confirmed fix 2026-07-24.
+        """
         position = self.positions[symbol]
         if position is None:
             return
@@ -290,10 +303,10 @@ class SupertrendStrategy:
             if close_price is None or supertrend_value is None:
                 return
 
-            if position['direction'] == 'up' and close_price > supertrend_value:
-                self.simulate_exit(symbol, "Trend Flip (candle close above Supertrend)")
-            elif position['direction'] == 'down' and close_price < supertrend_value:
+            if position['direction'] == 'up' and close_price < supertrend_value:
                 self.simulate_exit(symbol, "Trend Flip (candle close below Supertrend)")
+            elif position['direction'] == 'down' and close_price > supertrend_value:
+                self.simulate_exit(symbol, "Trend Flip (candle close above Supertrend)")
 
         except Exception as e:
             logger.error(f"[Supertrend] Error checking trend-flip exit for {symbol}: {str(e)}")
