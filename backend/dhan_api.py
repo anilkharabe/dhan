@@ -122,14 +122,27 @@ class DhanClient:
                 (df['SEM_SEGMENT'] == 'I') &
                 (df['SEM_TRADING_SYMBOL'].isin(['NIFTY', 'SENSEX', 'BANKNIFTY']))
             )
+            # NIFTY/SENSEX futures - only used by the Supertrend test strategy
+            # (backend/supertrend_strategy.py / futures_data.py). Verified live
+            # 2026-07-24: SEM_INSTRUMENT_NAME=='FUTIDX', trading symbols like
+            # "NIFTY-Jul2026-FUT" / "SENSEX-Jul2026-FUT".
+            futures_mask = (
+                (df['SEM_SEGMENT'] == 'D') &
+                (df['SEM_INSTRUMENT_NAME'] == 'FUTIDX') &
+                (
+                    ((df['SEM_EXM_EXCH_ID'] == 'NSE') & df['SEM_TRADING_SYMBOL'].astype(str).str.startswith('NIFTY-')) |
+                    ((df['SEM_EXM_EXCH_ID'] == 'BSE') & df['SEM_TRADING_SYMBOL'].astype(str).str.startswith('SENSEX-'))
+                )
+            )
 
-            self.instruments_df = df[options_mask | index_mask].copy()
+            self.instruments_df = df[options_mask | index_mask | futures_mask].copy()
             self.instruments_df.to_csv(self.instruments_cache_file, index=False)
 
             opt_count = int(options_mask.sum())
             idx_count = int(index_mask.sum())
+            fut_count = int(futures_mask.sum())
             logger.info(f"✅ Downloaded and cached {len(self.instruments_df)} Dhan instruments")
-            logger.info(f"  NIFTY/SENSEX/BANKNIFTY options: {opt_count} | Index rows: {idx_count}")
+            logger.info(f"  NIFTY/SENSEX/BANKNIFTY options: {opt_count} | Index rows: {idx_count} | Futures rows: {fut_count}")
 
             return True
 
@@ -216,6 +229,59 @@ class DhanClient:
             logger.error(f"Error generating Dhan instrument key: {str(e)}")
             return ""
 
+    def search_futures_instrument(self, symbol: str) -> Optional[str]:
+        """
+        Search for the nearest-expiry NIFTY/SENSEX futures security_id in the
+        cached Dhan scrip master. Only used by the Supertrend test strategy.
+
+        Args:
+            symbol: Underlying symbol ("NIFTY" or "SENSEX")
+
+        Returns:
+            Dhan security_id (as string) or None
+        """
+        try:
+            if self.instruments_df is None:
+                logger.info("Instruments not loaded, downloading...")
+                if not self.download_instruments_master():
+                    logger.error("Failed to download instruments")
+                    return None
+
+            df = self.instruments_df
+            filtered = df[
+                (df['SEM_INSTRUMENT_NAME'] == 'FUTIDX') &
+                (df['SEM_TRADING_SYMBOL'].astype(str).str.startswith(f"{symbol.upper()}-"))
+            ].copy()
+
+            if len(filtered) == 0:
+                logger.warning(f"Dhan futures instrument not found: {symbol}")
+                return None
+
+            # Nearest (soonest) expiry first
+            filtered = filtered.sort_values('SEM_EXPIRY_DATE')
+            return str(int(filtered.iloc[0]['SEM_SMST_SECURITY_ID']))
+
+        except Exception as e:
+            logger.error(f"Error searching Dhan futures instrument: {str(e)}")
+            return None
+
+    def get_futures_instrument_key(self, symbol: str) -> str:
+        """
+        Resolve a composite instrument key "{exchange_segment}|{security_id}" for
+        the nearest-expiry NIFTY/SENSEX future, same convention as get_instrument_key.
+        """
+        try:
+            security_id = self.search_futures_instrument(symbol)
+            if not security_id:
+                return ""
+
+            exchange_segment = "BSE_FNO" if symbol.upper() == "SENSEX" else "NSE_FNO"
+            return f"{exchange_segment}|{security_id}"
+
+        except Exception as e:
+            logger.error(f"Error generating Dhan futures instrument key: {str(e)}")
+            return ""
+
     def _parse_key(self, instrument_key: str) -> Tuple[str, str]:
         """Split a composite instrument key into (exchange_segment, security_id)"""
         exchange_segment, _, security_id = instrument_key.partition("|")
@@ -230,7 +296,8 @@ class DhanClient:
         interval: str,
         from_date: str = None,
         to_date: str = None,
-        _retries: int = 2
+        _retries: int = 2,
+        instrument_type: Optional[str] = None
     ) -> Optional[pd.DataFrame]:
         """
         Fetch minute candles (with Open Interest) via Dhan's intraday charts API.
@@ -244,6 +311,10 @@ class DhanClient:
             interval: Candle interval, e.g. "1minute", "3minute", "5minute"
             from_date: Start date (YYYY-MM-DD); defaults to today if not given
             to_date: End date (YYYY-MM-DD); defaults to today if not given
+            instrument_type: Overrides the auto-detected type below (e.g.
+                "FUTIDX" for the Supertrend test strategy's futures candles).
+                Leave None for the existing INDEX/OPTIDX auto-detect - every
+                pre-existing caller is unaffected by this parameter.
 
         Returns:
             DataFrame indexed by timestamp with columns [open, high, low, close, volume, oi]
@@ -257,7 +328,8 @@ class DhanClient:
                 logger.warning(f"get_historical_data called with invalid instrument_key: {instrument_key}")
                 return None
 
-            instrument_type = "INDEX" if exchange_segment == "IDX_I" else "OPTIDX"
+            if instrument_type is None:
+                instrument_type = "INDEX" if exchange_segment == "IDX_I" else "OPTIDX"
 
             if "minute" in interval:
                 interval_value = int(interval.replace("minute", "") or "1")
@@ -282,7 +354,7 @@ class DhanClient:
                 is_rate_limit = response and response.get('remarks', {}).get('error_type') == 'Rate_Limit'
                 if is_rate_limit and _retries > 0:
                     time.sleep(1.0)
-                    return self.get_historical_data(instrument_key, interval, from_date, to_date, _retries=_retries - 1)
+                    return self.get_historical_data(instrument_key, interval, from_date, to_date, _retries=_retries - 1, instrument_type=instrument_type)
                 logger.error(f"Dhan intraday_minute_data failed for {instrument_key}: {response}")
                 return None
 

@@ -134,66 +134,164 @@ class Indicators:
             plus_dm = pd.Series(plus_dm, index=df.index)
             minus_dm = pd.Series(minus_dm, index=df.index)
             
-            # Smooth TR and DM (using Wilder's smoothing)
-            # Wilder's Smoothing: 
-            # 1. First value is SMA of first 'period' values
-            # 2. Subsequent values: (Previous * (period-1) + Current) / period
-            
-            def wilder_smooth(series: pd.Series, period: int) -> pd.Series:
-                data = series.values
-                n = len(data)
-                smoothed = np.full(n, np.nan)
-                
-                # Need at least 'period' valid values
-                # Find first valid index if any NaNs at start
-                first_valid_idx = series.first_valid_index()
-                if first_valid_idx is None:
-                    return pd.Series(smoothed, index=series.index)
-                    
-                start_idx = series.index.get_loc(first_valid_idx)
-                
-                if n < start_idx + period:
-                    return pd.Series(smoothed, index=series.index)
-                
-                # Initialize with SMA
-                # The first smoothed value is at index (start_idx + period - 1)
-                first_sma = np.mean(data[start_idx:start_idx+period])
-                smoothed[start_idx + period - 1] = first_sma
-                
-                # Iterate for subsequent values
-                alpha = 1.0 / period
-                for i in range(start_idx + period, n):
-                    # y[i] = y[i-1] * (1-alpha) + x[i] * alpha
-                    # equivalent to (y[i-1] * (period-1) + x[i]) / period
-                    smoothed[i] = smoothed[i-1] * (1.0 - alpha) + data[i] * alpha
-                    
-                return pd.Series(smoothed, index=series.index)
+            # Smooth TR and DM using Wilder's smoothing (shared helper, see _wilder_smooth)
+            tr_smooth = Indicators._wilder_smooth(tr, period)
+            plus_dm_smooth = Indicators._wilder_smooth(plus_dm, period)
+            minus_dm_smooth = Indicators._wilder_smooth(minus_dm, period)
 
-            tr_smooth = wilder_smooth(tr, period)
-            plus_dm_smooth = wilder_smooth(plus_dm, period)
-            minus_dm_smooth = wilder_smooth(minus_dm, period)
-            
             # Calculate DI
             # Handle division by zero/NaN
             tr_smooth = tr_smooth.replace(0, np.nan)
-            
+
             plus_di = 100 * (plus_dm_smooth / tr_smooth)
             minus_di = 100 * (minus_dm_smooth / tr_smooth)
-            
+
             # Calculate DX
             sum_di = plus_di + minus_di
             diff_di = abs(plus_di - minus_di)
             dx = 100 * (diff_di / sum_di)
-            
+
             # ADX is smoothed DX
-            adx = wilder_smooth(dx, period)
+            adx = Indicators._wilder_smooth(dx, period)
 
             return adx
 
         except Exception as e:
             logger.error(f"Error calculating ADX: {str(e)}")
             return pd.Series([np.nan] * len(df))
-    
+
+    @staticmethod
+    def _wilder_smooth(series: pd.Series, period: int) -> pd.Series:
+        """
+        Wilder's Smoothing, shared by calculate_adx and calculate_supertrend (ATR).
+        1. First value is SMA of first 'period' values
+        2. Subsequent values: (Previous * (period-1) + Current) / period
+        """
+        data = series.values
+        n = len(data)
+        smoothed = np.full(n, np.nan)
+
+        # Need at least 'period' valid values
+        # Find first valid index if any NaNs at start
+        first_valid_idx = series.first_valid_index()
+        if first_valid_idx is None:
+            return pd.Series(smoothed, index=series.index)
+
+        start_idx = series.index.get_loc(first_valid_idx)
+
+        if n < start_idx + period:
+            return pd.Series(smoothed, index=series.index)
+
+        # Initialize with SMA
+        # The first smoothed value is at index (start_idx + period - 1)
+        first_sma = np.mean(data[start_idx:start_idx+period])
+        smoothed[start_idx + period - 1] = first_sma
+
+        # Iterate for subsequent values
+        alpha = 1.0 / period
+        for i in range(start_idx + period, n):
+            # y[i] = y[i-1] * (1-alpha) + x[i] * alpha
+            # equivalent to (y[i-1] * (period-1) + x[i]) / period
+            smoothed[i] = smoothed[i-1] * (1.0 - alpha) + data[i] * alpha
+
+        return pd.Series(smoothed, index=series.index)
+
+    @staticmethod
+    def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> pd.DataFrame:
+        """
+        Calculate the Supertrend indicator (ATR-based trend-following bands).
+
+        Args:
+            df: DataFrame with 'high', 'low', 'close' columns
+            period: ATR period (default 10)
+            multiplier: ATR multiplier for band width (default 3.0)
+
+        Returns:
+            Copy of df with two columns appended:
+              'supertrend': the indicator's line value
+              'supertrend_direction': 'up' or 'down' (NaN/None during ATR warmup)
+        """
+        try:
+            result = df.copy()
+            high = df['high']
+            low = df['low']
+            close = df['close']
+            n = len(df)
+
+            # True Range + Wilder ATR (same TR formula as calculate_adx)
+            tr1 = high - low
+            tr2 = abs(high - close.shift(1))
+            tr3 = abs(low - close.shift(1))
+            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            atr = Indicators._wilder_smooth(tr, period)
+
+            mid = (high + low) / 2.0
+            basic_upper = (mid + multiplier * atr).values
+            basic_lower = (mid - multiplier * atr).values
+            close_v = close.values
+
+            final_upper = np.full(n, np.nan)
+            final_lower = np.full(n, np.nan)
+            supertrend = np.full(n, np.nan)
+            direction = np.array([None] * n, dtype=object)
+
+            first_valid = atr.first_valid_index()
+            if first_valid is None:
+                result['supertrend'] = supertrend
+                result['supertrend_direction'] = direction
+                return result
+            start_idx = df.index.get_loc(first_valid)
+
+            # Seed the first row: start in "down" state (supertrend = upper band)
+            # so the first real signal comes from an observed close crossing it,
+            # same convention used by most reference implementations.
+            final_upper[start_idx] = basic_upper[start_idx]
+            final_lower[start_idx] = basic_lower[start_idx]
+            supertrend[start_idx] = final_upper[start_idx]
+            direction[start_idx] = 'down'
+
+            for i in range(start_idx + 1, n):
+                if np.isnan(basic_upper[i]) or np.isnan(basic_lower[i]):
+                    continue
+
+                # Tighten final bands (they only move toward price, never away)
+                if basic_upper[i] < final_upper[i - 1] or close_v[i - 1] > final_upper[i - 1]:
+                    final_upper[i] = basic_upper[i]
+                else:
+                    final_upper[i] = final_upper[i - 1]
+
+                if basic_lower[i] > final_lower[i - 1] or close_v[i - 1] < final_lower[i - 1]:
+                    final_lower[i] = basic_lower[i]
+                else:
+                    final_lower[i] = final_lower[i - 1]
+
+                # Trend-flip state machine
+                if supertrend[i - 1] == final_upper[i - 1]:
+                    if close_v[i] <= final_upper[i]:
+                        supertrend[i] = final_upper[i]
+                        direction[i] = 'down'
+                    else:
+                        supertrend[i] = final_lower[i]
+                        direction[i] = 'up'
+                else:  # supertrend[i-1] == final_lower[i-1]
+                    if close_v[i] >= final_lower[i]:
+                        supertrend[i] = final_lower[i]
+                        direction[i] = 'up'
+                    else:
+                        supertrend[i] = final_upper[i]
+                        direction[i] = 'down'
+
+            result['supertrend'] = supertrend
+            result['supertrend_direction'] = direction
+            return result
+
+        except Exception as e:
+            logger.error(f"Error calculating Supertrend: {str(e)}")
+            result = df.copy()
+            result['supertrend'] = np.nan
+            result['supertrend_direction'] = None
+            return result
+
     @staticmethod
     def calculate_all_indicators(df: pd.DataFrame, rsi_period: int = 14, sma_period: int = 20) -> pd.DataFrame:
         """

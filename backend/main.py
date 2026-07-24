@@ -17,6 +17,7 @@ from trade_tracker import trade_tracker
 from telegram_notifier import telegram_notifier
 from charts import chart_generator
 from mongo_logger import mongo_logger
+from supertrend_strategy import supertrend_strategy
 
 class AlgoTradingSystem:
     """Main trading system orchestrator - supports multi-index trading"""
@@ -254,7 +255,14 @@ class AlgoTradingSystem:
             # Restore active positions from Dhan to prevent duplicate trades
             logger.info("Restoring active positions...")
             order_manager.restore_state()
-            
+
+            # Supertrend test strategy (isolated paper-trading, own state file -
+            # see supertrend_strategy.py). Entirely separate from the restore
+            # above by design, so it can never interact with CREDIT_A positions.
+            if config.SUPERTREND_CS_ENABLED:
+                logger.info("Restoring Supertrend test strategy state...")
+                supertrend_strategy.restore_state()
+
             return True
         
         except Exception as e:
@@ -727,7 +735,26 @@ class AlgoTradingSystem:
         except Exception as e:
             logger.error(f"Error checking stop losses/profit targets: {str(e)}")
             telegram_notifier.send_error("SL/Profit Check", str(e))
-    
+
+    def _supertrend_tick(self):
+        """
+        Scheduled wrapper around the isolated Supertrend test strategy's
+        monitor loop - try/except'd the same way check_stop_losses_only is,
+        so a bug in that module can never crash CREDIT_A's own jobs.
+        """
+        try:
+            supertrend_strategy.monitor_tick()
+        except Exception as e:
+            logger.error(f"Error in Supertrend strategy tick: {str(e)}")
+            telegram_notifier.send_error("Supertrend Strategy Tick", str(e))
+
+    def _supertrend_eod(self):
+        try:
+            supertrend_strategy.close_all_positions_eod()
+        except Exception as e:
+            logger.error(f"Error in Supertrend EOD square-off: {str(e)}")
+            telegram_notifier.send_error("Supertrend Strategy EOD", str(e))
+
     def end_of_day_routine(self):
         """End of day routine - close positions and generate reports"""
         try:
@@ -877,6 +904,15 @@ class AlgoTradingSystem:
             # around to notice it expired, so refresh it before that happens
             # rather than only reacting to a manual update in .env.
             schedule.every().day.at("09:00").do(self.refresh_dhan_token)
+
+            # 7. Supertrend test strategy (isolated paper-trading) - only if
+            # enabled. Own 3-min-candle-close-driven entry/trend-flip logic
+            # plus a frequent fixed-SL/target check, all inside monitor_tick().
+            if config.SUPERTREND_CS_ENABLED:
+                schedule.every(20).seconds.do(self._supertrend_tick)
+                eod_time_st = config.TRADING_END_TIME.strftime("%H:%M")
+                schedule.every().day.at(eod_time_st).do(self._supertrend_eod)
+                logger.info("📈 Supertrend test strategy scheduled (paper-trading only)")
 
             # Main loop
             while self.running:

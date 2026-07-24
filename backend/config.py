@@ -158,6 +158,39 @@ CREDIT_SPREAD_STRATEGIES = {
     }
 }
 
+# ============================================================================
+# SUPERTREND CREDIT SPREAD (isolated paper-trading test strategy)
+# ============================================================================
+# Separate strategy, always paper-simulated regardless of PAPER_TRADING above -
+# see backend/supertrend_strategy.py, which never calls dhan_client.place_order
+# and never touches order_manager.active_positions/trade_tracker, so it can
+# never block or be blocked by CREDIT_A. Toggle here to enable/disable the
+# multi-day test; default off.
+SUPERTREND_CS_ENABLED = False
+
+SUPERTREND_PERIOD = 10
+SUPERTREND_MULTIPLIER = 3.0
+SUPERTREND_CANDLE_INTERVAL = "3minute"
+SUPERTREND_WARMUP_TRADING_DAYS = 5  # trailing days of 3-min futures candles fetched for ATR warmup
+
+SUPERTREND_PROFIT_TARGET_PERCENT = 90
+
+SUPERTREND_CS_TAG = "SUPERTREND_CS"
+
+# Each symbol trades only the day-before-expiry + expiry-day itself (NIFTY
+# expires Tuesday, SENSEX expires Thursday - see NIFTY_EXPIRY_DAY/SENSEX_EXPIRY_DAY
+# below). sl_percent_by_day is keyed by Python's Monday=0..Sunday=6 weekday().
+SUPERTREND_CS_CONFIG = {
+    "NIFTY": {
+        "trading_days": [0, 1],  # Monday, Tuesday (expiry)
+        "sl_percent_by_day": {0: 50, 1: 100},
+    },
+    "SENSEX": {
+        "trading_days": [2, 3],  # Wednesday, Thursday (expiry)
+        "sl_percent_by_day": {2: 50, 3: 100},
+    },
+}
+
 
 # ============================================================================
 # DHAN API CREDENTIALS
