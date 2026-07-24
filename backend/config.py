@@ -165,8 +165,8 @@ CREDIT_SPREAD_STRATEGIES = {
 # see backend/supertrend_strategy.py, which never calls dhan_client.place_order
 # and never touches order_manager.active_positions/trade_tracker, so it can
 # never block or be blocked by CREDIT_A. Toggle here to enable/disable the
-# multi-day test; default off.
-SUPERTREND_CS_ENABLED = False
+# multi-day test - enabled 2026-07-24 to start the multi-day paper-trading trial.
+SUPERTREND_CS_ENABLED = True
 
 SUPERTREND_PERIOD = 10
 SUPERTREND_MULTIPLIER = 3.0
