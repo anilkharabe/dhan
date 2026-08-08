@@ -15,6 +15,40 @@ import '../App.css';
 
 const NIFTY_INDEX_KEY = 'IDX_I|13';
 const SENSEX_INDEX_KEY = 'IDX_I|51';
+const SUPERTREND_TAG = 'SUPERTREND_CS';
+
+// Builds the entry (sold)/exit (bought back) markers for whichever leg of a
+// trade was clicked - near/sold leg and far/hedge leg have opposite BUY/SELL
+// directions on both entry and exit (see TradeHistoryTable's event builder).
+const buildTradeMarkers = (trade, instrumentKey) => {
+    if (!trade) return null;
+    const isFarLeg = trade.is_spread && instrumentKey === trade.far_instrument_key;
+
+    if (isFarLeg) {
+        return {
+            entryTime: trade.entry_time,
+            entryPrice: trade.far_entry_price,
+            entryAction: 'BUY',
+            entryLabel: `Hedge Buy ₹${(trade.far_entry_price ?? 0).toFixed(2)}`,
+            exitTime: trade.exit_time,
+            exitPrice: trade.far_exit_price,
+            exitAction: 'SELL',
+            exitLabel: `Hedge Sell ₹${(trade.far_exit_price ?? 0).toFixed(2)}`,
+        };
+    }
+
+    const isSpread = !!trade.is_spread;
+    return {
+        entryTime: trade.entry_time,
+        entryPrice: trade.entry_price,
+        entryAction: isSpread ? 'SELL' : 'BUY',
+        entryLabel: `${isSpread ? 'Sold' : 'Buy'} ₹${(trade.entry_price ?? 0).toFixed(2)}`,
+        exitTime: trade.exit_time,
+        exitPrice: trade.exit_price,
+        exitAction: isSpread ? 'BUY' : 'SELL',
+        exitLabel: `${isSpread ? 'Bought Back' : 'Sell'} ₹${(trade.exit_price ?? 0).toFixed(2)}`,
+    };
+};
 
 function Dashboard() {
     const [profile, setProfile] = useState(null);
@@ -37,7 +71,9 @@ function Dashboard() {
     const [selectedChart, setSelectedChart] = useState({
         type: 'INDEX',
         symbol: 'NIFTY 50',
-        key: NIFTY_INDEX_KEY
+        key: NIFTY_INDEX_KEY,
+        strategyTag: null,
+        tradeMarkers: null
     });
 
     // Extract instrument keys from positions for WebSocket subscription
@@ -407,15 +443,26 @@ function Dashboard() {
 
                 {/* Find active position for the selected chart */
                     (() => {
+                        // Only match the near/sold leg here - the entry/SL price lines
+                        // below are drawn at that leg's own price, so keying off the far
+                        // (hedge) leg would draw them at the wrong price on its chart.
                         const activePosition = positions.find(p => p.instrument_key === selectedChart.key);
+                        const positionForStrategy = activePosition || positions.find(p => p.far_instrument_key === selectedChart.key);
+                        const strategyTag = selectedChart.strategyTag || positionForStrategy?.strategy_tag || null;
+                        const interval = selectedChart.interval || (strategyTag === SUPERTREND_TAG ? '3minute' : '1minute');
                         return (
                             <CandlestickChart
-                                key={selectedChart.key} // Force re-mount on change
+                                // Force re-mount when either the instrument or the strategy
+                                // (RSI/VWAP/OI panels vs Supertrend panel, different candle
+                                // interval) changes, even if the instrument key is unchanged.
+                                key={`${selectedChart.key}-${strategyTag || 'na'}`}
                                 instrumentKey={selectedChart.key}
                                 liveTick={liveTicks[selectedChart.key]}
                                 symbol={selectedChart.symbol}
-                                interval="1minute"
+                                interval={interval}
                                 activePosition={activePosition}
+                                strategyTag={strategyTag}
+                                tradeMarkers={selectedChart.tradeMarkers || null}
                             />
                         );
                     })()
@@ -433,10 +480,17 @@ function Dashboard() {
                 positions={positions}
                 liveTicks={liveTicks}
                 onRowClick={(pos) => {
+                    const fullPosition = positions.find(
+                        p => p.instrument_key === pos.instrument_key || p.far_instrument_key === pos.instrument_key
+                    );
+                    const strategyTag = fullPosition?.strategy_tag || null;
                     setSelectedChart({
                         type: 'OPTION',
                         symbol: pos.symbol,
-                        key: pos.instrument_key
+                        key: pos.instrument_key,
+                        strategyTag,
+                        interval: strategyTag === SUPERTREND_TAG ? '3minute' : '1minute',
+                        tradeMarkers: buildTradeMarkers(fullPosition, pos.instrument_key)
                     });
                 }}
             />
@@ -446,10 +500,14 @@ function Dashboard() {
                 trades={trades}
                 onRowClick={(event) => {
                     if (event.instrument_key) {
+                        const strategyTag = event.strategy_tag || null;
                         setSelectedChart({
                             type: 'OPTION',
                             symbol: `${event.symbol} ${event.strike} ${event.type}`,
-                            key: event.instrument_key
+                            key: event.instrument_key,
+                            strategyTag,
+                            interval: strategyTag === SUPERTREND_TAG ? '3minute' : '1minute',
+                            tradeMarkers: buildTradeMarkers(event.sourceTrade, event.instrument_key)
                         });
                         // Scroll to chart
                         window.scrollTo({ top: 0, behavior: 'smooth' });

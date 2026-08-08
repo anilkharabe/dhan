@@ -40,7 +40,8 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                 aiReasoning: trade.entry_reason,
                 strategy_tag: trade.strategy_tag,
                 instrument_key: trade.far_instrument_key,
-                isEntry: true
+                isEntry: true,
+                sourceTrade: trade
             });
             events.push({
                 id: `entry-near-${trade.trade_id}`,
@@ -57,7 +58,8 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                 aiReasoning: trade.entry_reason,
                 strategy_tag: trade.strategy_tag,
                 instrument_key: trade.instrument_key,
-                isEntry: true
+                isEntry: true,
+                sourceTrade: trade
             });
 
             if (trade.status === 'CLOSED' && trade.exit_price != null) {
@@ -85,7 +87,8 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                     pnl: nearLegPnl,
                     pnl_percent: nearEntry > 0 ? (nearLegPnl / (nearEntry * lot)) * 100 : 0,
                     strategy_tag: trade.strategy_tag,
-                    instrument_key: trade.instrument_key
+                    instrument_key: trade.instrument_key,
+                    sourceTrade: trade
                 });
                 events.push({
                     id: `exit-far-${trade.trade_id}`,
@@ -106,7 +109,8 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                     instrument_key: trade.far_instrument_key,
                     netPnl: trade.pnl,
                     netPnlPercent: trade.pnl_percent,
-                    isLastLeg: true
+                    isLastLeg: true,
+                    sourceTrade: trade
                 });
             }
             return;
@@ -131,7 +135,8 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
             aiReasoning: trade.entry_reason,
             strategy_tag: trade.strategy_tag,
             instrument_key: trade.instrument_key,
-            isEntry: true
+            isEntry: true,
+            sourceTrade: trade
         });
 
         // 2. Partial Exits (SELL)
@@ -151,7 +156,8 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                 pnl: pe.pnl,
                 strategy_tag: trade.strategy_tag,
                 instrument_key: trade.instrument_key,
-                pnl_percent: ((pe.exit_price - trade.entry_price) / trade.entry_price) * 100
+                pnl_percent: ((pe.exit_price - trade.entry_price) / trade.entry_price) * 100,
+                sourceTrade: trade
             });
         });
 
@@ -172,7 +178,8 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                 pnl: trade.pnl,
                 strategy_tag: trade.strategy_tag,
                 instrument_key: trade.instrument_key,
-                pnl_percent: trade.pnl_percent
+                pnl_percent: trade.pnl_percent,
+                sourceTrade: trade
             });
         }
     });

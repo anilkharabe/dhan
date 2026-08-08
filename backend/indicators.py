@@ -328,7 +328,16 @@ class Indicators:
             # Calculate SMA on Volume (for volume confirmation)
             if 'volume' in df_copy.columns:
                 df_copy['volume_sma'] = Indicators.calculate_sma(df_copy['volume'], period=sma_period)
-            
+
+            # Calculate Supertrend (used by the Supertrend strategy, both for
+            # underlying strike selection and for the option premium's own
+            # trailing SL - see supertrend_strategy.py)
+            st_period = getattr(config, 'SUPERTREND_PERIOD', 10)
+            st_multiplier = getattr(config, 'SUPERTREND_MULTIPLIER', 3.0)
+            st_df = Indicators.calculate_supertrend(df_copy, period=st_period, multiplier=st_multiplier)
+            df_copy['supertrend'] = st_df['supertrend']
+            df_copy['supertrend_direction'] = st_df['supertrend_direction']
+
             return df_copy
         
         except Exception as e:

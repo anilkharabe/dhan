@@ -549,17 +549,20 @@ class DataManager:
         self,
         instrument_key: str,
         from_time: str = "09:15",
-        to_time: Optional[str] = None
+        to_time: Optional[str] = None,
+        interval: str = None
     ) -> Optional[pd.DataFrame]:
         """
         Fetch current day's candles using V3 API
         V3 automatically returns all intraday candles for current trading day
-        
+
         Args:
             instrument_key: Instrument identifier
             from_time: Start time (HH:MM) - used for filtering
             to_time: End time (HH:MM) or None for current time - used for filtering
-        
+            interval: Candle interval (e.g. "1minute", "3minute"); defaults to
+                config.CANDLE_INTERVAL
+
         Returns:
             DataFrame with current day's candles
         """
@@ -567,7 +570,7 @@ class DataManager:
             # Fetches all of today's candles automatically (from_date/to_date default to today)
             df = dhan_client.get_historical_data(
                 instrument_key=instrument_key,
-                interval=config.CANDLE_INTERVAL
+                interval=interval or config.CANDLE_INTERVAL
             )
             
             if df is not None and len(df) > 0:
@@ -589,38 +592,44 @@ class DataManager:
     def get_combined_data(
         self,
         instrument_key: str,
-        previous_day_candles: int = 5
+        previous_day_candles: int = 5,
+        interval: str = None
     ) -> Optional[pd.DataFrame]:
         """
         Get intraday data for analysis
-        
-        NOTE: V3 API only provides current day data. 
+
+        NOTE: V3 API only provides current day data.
         Previous day data not available.
-        
+
         Args:
             instrument_key: Instrument identifier
             previous_day_candles: Not used with V3 (kept for compatibility)
-        
+            interval: Candle interval (e.g. "1minute", "3minute"); defaults to
+                config.CANDLE_INTERVAL. Pass "3minute" to match what the
+                Supertrend strategy actually computed its signals on.
+
         Returns:
             DataFrame with current day candles
         """
         try:
+            interval = interval or config.CANDLE_INTERVAL
+
             # Demo mode - generate mock data
             if config.DEMO_MODE:
                 logger.info(f"DEMO MODE: Generating mock candle data for {instrument_key}")
                 return self._generate_mock_data(num_candles=30)
-            
+
             # 1. Fetch current day candles (Intraday)
-            curr_df = self.fetch_current_day_candles(instrument_key)
-            
+            curr_df = self.fetch_current_day_candles(instrument_key, interval=interval)
+
             # 2. Fetch previous days' data (Historical)
             # Calculate start date for history (e.g., 5 days ago)
             from_date = (datetime.now() - timedelta(days=previous_day_candles + 2)).strftime('%Y-%m-%d')
             to_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-            
+
             hist_df = dhan_client.get_historical_data(
                 instrument_key=instrument_key,
-                interval=config.CANDLE_INTERVAL,
+                interval=interval,
                 from_date=from_date,
                 to_date=to_date
             )

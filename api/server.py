@@ -385,7 +385,7 @@ def get_historical_candles():
         # 2. Fallback: Fetch from Dhan API via DataManager
         # This handles cases where data isn't in cache yet
         # Use get_combined_data to include previous days for indicators/charts
-        df = data_manager.get_combined_data(instrument_key, previous_day_candles=5)
+        df = data_manager.get_combined_data(instrument_key, previous_day_candles=5, interval=interval)
         
         if df is not None and not df.empty:
             # Calculate indicators before returning
@@ -446,7 +446,11 @@ def get_historical_candles():
                     candle['oi_sma'] = row['oi_sma']
                 if 'volume_sma' in row and not pd.isna(row['volume_sma']):
                     candle['volume_sma'] = row['volume_sma']
-                
+                if 'supertrend' in row and not pd.isna(row['supertrend']):
+                    candle['supertrend'] = row['supertrend']
+                if 'supertrend_direction' in row and row['supertrend_direction'] in ('up', 'down'):
+                    candle['supertrend_direction'] = row['supertrend_direction']
+
                 candles.append(candle)
                 
             # Append forming candle if needed (Logic: if last candle in DB is older than current minute)

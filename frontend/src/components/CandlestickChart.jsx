@@ -1,11 +1,58 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { createChart, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
+import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
 
-const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval = "1minute", activePosition }) => {
+const SUPERTREND_TAG = 'SUPERTREND_CS';
+
+// Trade timestamps from the backend are IST wall-clock strings - either
+// "HH:MM:SS" for today (see /api/trades/history) or "YYYY-MM-DD HH:MM:SS"
+// (see /api/current-positions). Candle times from /api/historical-candles are
+// epoch seconds derived the same way (naive local time treated as IST) - so
+// building the epoch here the same way keeps markers aligned to candles.
+const istTimeStringToEpoch = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return null;
+    let y, mo, d, h, m, s;
+    if (timeStr.includes('-')) {
+        const [datePart, timePart] = timeStr.split(' ');
+        const [yy, mm, dd] = (datePart || '').split('-').map(Number);
+        const [hh, mi, ss] = (timePart || '').split(':').map(Number);
+        y = yy; mo = mm - 1; d = dd; h = hh; m = mi; s = ss || 0;
+    } else {
+        const nowIst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        y = nowIst.getFullYear(); mo = nowIst.getMonth(); d = nowIst.getDate();
+        const [hh, mi, ss] = timeStr.split(':').map(Number);
+        h = hh; m = mi; s = ss || 0;
+    }
+    if ([y, mo, d, h, m, s].some((v) => v === undefined || Number.isNaN(v))) return null;
+    const utcMs = Date.UTC(y, mo, d, h, m, s) - 5.5 * 3600 * 1000;
+    return Math.floor(utcMs / 1000);
+};
+
+// Snap a raw epoch to the closest candle time so the marker always lands on
+// an actual plotted point.
+const snapToCandle = (epoch, candles) => {
+    if (epoch == null || !candles || candles.length === 0) return null;
+    let closest = candles[0].time;
+    let bestDiff = Math.abs(candles[0].time - epoch);
+    for (const c of candles) {
+        const diff = Math.abs(c.time - epoch);
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            closest = c.time;
+        }
+    }
+    return closest;
+};
+
+const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval = "1minute", activePosition, tradeMarkers = null, strategyTag = null }) => {
+    const isSupertrend = strategyTag === SUPERTREND_TAG;
+
     const chartContainerRef = useRef(null);
     const chartRef = useRef(null);
     const candleSeriesRef = useRef(null);
     const vwapSeriesRef = useRef(null);
+    const seriesMarkersRef = useRef(null);
+    const stUpSeriesRef = useRef(null);
+    const stDownSeriesRef = useRef(null);
 
     const rsiContainerRef = useRef(null);
     const rsiChartRef = useRef(null);
@@ -25,6 +72,7 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
     const [hasOiData, setHasOiData] = useState(false);
     const [tooltipData, setTooltipData] = useState(null);
     const lastCandleRef = useRef(null);
+    const candlesRef = useRef([]);
 
     // Helper to format time to IST for both Tooltip and X-Axis
     const formatToIST = (timestamp) => {
@@ -47,6 +95,42 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
         tickMarkFormatter: (time) => {
             return formatToIST(time);
         },
+    };
+
+    // Draws the sold/entry and bought-back/exit arrows on the option's own
+    // candles, snapped to the nearest loaded candle time.
+    const applyTradeMarkers = () => {
+        if (!seriesMarkersRef.current) return;
+        const candles = candlesRef.current;
+        if (!tradeMarkers || candles.length === 0) {
+            seriesMarkersRef.current.setMarkers([]);
+            return;
+        }
+
+        const markers = [];
+        const pushMarker = (timeStr, action, price, label) => {
+            const epoch = istTimeStringToEpoch(timeStr);
+            const time = snapToCandle(epoch, candles);
+            if (time == null) return;
+            const isBuy = action === 'BUY';
+            markers.push({
+                time,
+                position: isBuy ? 'belowBar' : 'aboveBar',
+                color: isBuy ? '#26a69a' : '#ef5350',
+                shape: isBuy ? 'arrowUp' : 'arrowDown',
+                text: label || `${action} ₹${price != null ? price.toFixed(2) : ''}`,
+            });
+        };
+
+        if (tradeMarkers.entryTime) {
+            pushMarker(tradeMarkers.entryTime, tradeMarkers.entryAction, tradeMarkers.entryPrice, tradeMarkers.entryLabel);
+        }
+        if (tradeMarkers.exitTime) {
+            pushMarker(tradeMarkers.exitTime, tradeMarkers.exitAction, tradeMarkers.exitPrice, tradeMarkers.exitLabel);
+        }
+
+        markers.sort((a, b) => a.time - b.time);
+        seriesMarkersRef.current.setMarkers(markers);
     };
 
     // Fetch historical data
@@ -87,16 +171,31 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
                         upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
                         wickUpColor: '#26a69a', wickDownColor: '#ef5350'
                     });
+                    seriesMarkersRef.current = createSeriesMarkers(candleSeriesRef.current, []);
 
-                    vwapSeriesRef.current = chart.addSeries(LineSeries, {
-                        color: '#2962FF', lineWidth: 2, title: 'VWAP'
-                    });
+                    if (isSupertrend) {
+                        // Supertrend on the option's OWN premium candles (used for the
+                        // strategy's trailing SL) - split into up/down segments so each
+                        // half renders in its trend color, same convention charting
+                        // platforms use.
+                        stUpSeriesRef.current = chart.addSeries(LineSeries, {
+                            color: '#26a69a', lineWidth: 2, title: 'Supertrend (up)'
+                        });
+                        stDownSeriesRef.current = chart.addSeries(LineSeries, {
+                            color: '#ef5350', lineWidth: 2, title: 'Supertrend (down)'
+                        });
+                    } else {
+                        vwapSeriesRef.current = chart.addSeries(LineSeries, {
+                            color: '#2962FF', lineWidth: 2, title: 'VWAP'
+                        });
+                    }
 
                     chartRef.current = chart;
                 }
 
-                // Initialize RSI Chart
-                if (!rsiChartRef.current && rsiContainerRef.current) {
+                // Initialize RSI Chart (Credit Spread strategy only - Supertrend
+                // strategy doesn't gate on RSI/VWAP/OI/ADX)
+                if (!isSupertrend && !rsiChartRef.current && rsiContainerRef.current) {
                     const rsiChart = createChart(rsiContainerRef.current, {
                         layout: { background: { color: '#ffffff' }, textColor: '#333' },
                         grid: { vertLines: { color: '#f0f3fa' }, horzLines: { color: '#f0f3fa' } },
@@ -115,8 +214,8 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
                     rsiChartRef.current = rsiChart;
                 }
 
-                // Initialize ADX Chart
-                if (!adxChartRef.current && adxContainerRef.current) {
+                // Initialize ADX Chart (Credit Spread strategy only)
+                if (!isSupertrend && !adxChartRef.current && adxContainerRef.current) {
                     const adxChart = createChart(adxContainerRef.current, {
                         layout: { background: { color: '#ffffff' }, textColor: '#333' },
                         grid: { vertLines: { color: '#f0f3fa' }, horzLines: { color: '#f0f3fa' } },
@@ -134,8 +233,8 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
                     adxChartRef.current = adxChart;
                 }
 
-                // Initialize OI Chart
-                if (!oiChartRef.current && oiContainerRef.current && oiAvailable) {
+                // Initialize OI Chart (Credit Spread strategy only)
+                if (!isSupertrend && !oiChartRef.current && oiContainerRef.current && oiAvailable) {
                     const oiChart = createChart(oiContainerRef.current, {
                         layout: { background: { color: '#ffffff' }, textColor: '#333' },
                         grid: { vertLines: { color: '#f0f3fa' }, horzLines: { color: '#f0f3fa' } },
@@ -188,7 +287,9 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
                             }
                         }
                     });
-                    vwapSeriesRef.current.setData(uniqueCandles.map(c => c.vwap !== undefined ? { time: c.time, value: c.vwap } : { time: c.time }));
+                    if (vwapSeriesRef.current) {
+                        vwapSeriesRef.current.setData(uniqueCandles.map(c => c.vwap !== undefined ? { time: c.time, value: c.vwap } : { time: c.time }));
+                    }
 
                     if (rsiSeriesRef.current) {
                         rsiSeriesRef.current.setData(uniqueCandles.map(c => c.rsi !== undefined ? { time: c.time, value: c.rsi } : { time: c.time }));
@@ -203,9 +304,16 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
                         oiSmaSeriesRef.current.setData(uniqueCandles.map(c => c.oi_sma !== undefined ? { time: c.time, value: c.oi_sma } : { time: c.time }));
                     }
 
+                    if (stUpSeriesRef.current && stDownSeriesRef.current) {
+                        stUpSeriesRef.current.setData(uniqueCandles.map(c => (c.supertrend !== undefined && c.supertrend_direction === 'up') ? { time: c.time, value: c.supertrend } : { time: c.time }));
+                        stDownSeriesRef.current.setData(uniqueCandles.map(c => (c.supertrend !== undefined && c.supertrend_direction === 'down') ? { time: c.time, value: c.supertrend } : { time: c.time }));
+                    }
+
                     if (uniqueCandles.length > 0) {
                         lastCandleRef.current = uniqueCandles[uniqueCandles.length - 1];
                     }
+                    candlesRef.current = uniqueCandles;
+                    applyTradeMarkers();
 
                     // Sync Time Scales — all charts have same time points now, so logical range works perfectly
                     const charts = [chartRef.current, rsiChartRef.current, adxChartRef.current, oiChartRef.current].filter(Boolean);
@@ -251,6 +359,12 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
             });
         };
     }, [instrumentKey, interval]);
+
+    // Re-draw entry/exit markers whenever the selected trade changes without
+    // the underlying instrument/interval changing (candles are already loaded).
+    useEffect(() => {
+        applyTradeMarkers();
+    }, [tradeMarkers]);
 
     // Resize observer
     useEffect(() => {
@@ -372,13 +486,19 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
                         {symbol}
                     </h2>
                     <div className="flex flex-wrap gap-2">
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs font-bold border border-blue-100">VWAP</span>
-                        <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs font-bold border border-purple-100">RSI</span>
-                        <span className="px-2 py-0.5 bg-pink-50 text-pink-600 rounded text-xs font-bold border border-pink-100">ADX</span>
-                        {hasOiData && (
+                        {isSupertrend ? (
+                            <span className="px-2 py-0.5 bg-teal-50 text-teal-700 rounded text-xs font-bold border border-teal-100">SUPERTREND (Trailing SL)</span>
+                        ) : (
                             <>
-                                <span className="px-2 py-0.5 bg-orange-50 text-orange-600 rounded text-xs font-bold border border-orange-100">OI</span>
-                                <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded text-xs font-bold border border-green-100">OI SMA</span>
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs font-bold border border-blue-100">VWAP</span>
+                                <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs font-bold border border-purple-100">RSI</span>
+                                <span className="px-2 py-0.5 bg-pink-50 text-pink-600 rounded text-xs font-bold border border-pink-100">ADX</span>
+                                {hasOiData && (
+                                    <>
+                                        <span className="px-2 py-0.5 bg-orange-50 text-orange-600 rounded text-xs font-bold border border-orange-100">OI</span>
+                                        <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded text-xs font-bold border border-green-100">OI SMA</span>
+                                    </>
+                                )}
                             </>
                         )}
                     </div>
@@ -407,26 +527,28 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
                 {error && <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 text-red-500 text-sm">{error}</div>}
             </div>
 
-            <div className="mt-4 border-t border-gray-100 pt-4 flex flex-col gap-4">
-                <div>
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-purple-500 rounded-full"></span> RSI (14)
-                    </p>
-                    <div ref={rsiContainerRef} className="w-full h-[100px]"></div>
+            {!isSupertrend && (
+                <div className="mt-4 border-t border-gray-100 pt-4 flex flex-col gap-4">
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-purple-500 rounded-full"></span> RSI (14)
+                        </p>
+                        <div ref={rsiContainerRef} className="w-full h-[100px]"></div>
+                    </div>
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-pink-500 rounded-full"></span> ADX (14)
+                        </p>
+                        <div ref={adxContainerRef} className="w-full h-[100px]"></div>
+                    </div>
+                    <div className={hasOiData ? "" : "opacity-30"}>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-orange-500 rounded-full"></span> Open Interest {!hasOiData && "(No Data)"}
+                        </p>
+                        <div ref={oiContainerRef} className="w-full h-[100px]"></div>
+                    </div>
                 </div>
-                <div>
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-pink-500 rounded-full"></span> ADX (14)
-                    </p>
-                    <div ref={adxContainerRef} className="w-full h-[100px]"></div>
-                </div>
-                <div className={hasOiData ? "" : "opacity-30"}>
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-orange-500 rounded-full"></span> Open Interest {!hasOiData && "(No Data)"}
-                    </p>
-                    <div ref={oiContainerRef} className="w-full h-[100px]"></div>
-                </div>
-            </div>
+            )}
             {/* Debug Info */}
             <div className="mt-2 text-[10px] text-gray-400 font-mono">
                 Last Tick: {liveTick ? `${new Date(liveTick.timestamp).toLocaleTimeString()} @ ${liveTick.ltp}` : "None"} |
