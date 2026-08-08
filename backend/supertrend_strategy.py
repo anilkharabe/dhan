@@ -14,6 +14,7 @@ the fetched LTP, unconditionally (not gated on config.PAPER_TRADING).
 import json
 import math
 import os
+import time
 from datetime import datetime
 
 import pandas as pd
@@ -37,7 +38,6 @@ class SupertrendStrategy:
 
     def __init__(self):
         self.positions = {s: None for s in SYMBOLS}
-        self.traded_today = {s: False for s in SYMBOLS}
         self.last_processed_candle_ts = {s: None for s in SYMBOLS}
         self.current_date = datetime.now().date()
         self._next_trade_id = 1
@@ -60,9 +60,8 @@ class SupertrendStrategy:
                 return
 
             self.positions = saved.get('positions', {s: None for s in SYMBOLS})
-            self.traded_today = saved.get('traded_today', {s: False for s in SYMBOLS})
             self._next_trade_id = saved.get('next_trade_id', 1)
-            logger.info(f"[Supertrend] Restored state: positions={self.positions}, traded_today={self.traded_today}")
+            logger.info(f"[Supertrend] Restored state: positions={self.positions}")
 
         except Exception as e:
             logger.error(f"[Supertrend] Error restoring state: {str(e)}")
@@ -73,7 +72,6 @@ class SupertrendStrategy:
                 json.dump({
                     'date': datetime.now().strftime('%Y-%m-%d'),
                     'positions': self.positions,
-                    'traded_today': self.traded_today,
                     'next_trade_id': self._next_trade_id,
                 }, f, default=str)
         except Exception as e:
@@ -82,9 +80,8 @@ class SupertrendStrategy:
     def _handle_day_rollover(self):
         today = datetime.now().date()
         if today != self.current_date:
-            logger.info(f"[Supertrend] Day rollover {self.current_date} -> {today}, resetting traded_today.")
+            logger.info(f"[Supertrend] Day rollover {self.current_date} -> {today}.")
             self.current_date = today
-            self.traded_today = {s: False for s in SYMBOLS}
             self.last_processed_candle_ts = {s: None for s in SYMBOLS}
             self._persist_state()
 
@@ -172,9 +169,15 @@ class SupertrendStrategy:
         return config.TRADING_START_TIME <= now_t <= config.ENTRY_END_TIME
 
     def evaluate_entry(self, symbol: str, closed_candle):
+        """
+        Re-entry is unlimited within the entry window: once a position closes
+        (SL or target), the symbol is immediately eligible again on the next
+        new closed candle - no once-per-day cap (per user direction, this
+        replaced the earlier one-trade-per-symbol-per-day rule).
+        """
         if not self.is_trading_day(symbol):
             return
-        if self.traded_today[symbol] or self.positions[symbol] is not None:
+        if self.positions[symbol] is not None:
             return
         if not self._within_entry_window():
             return
@@ -224,11 +227,11 @@ class SupertrendStrategy:
                 'far_option_type': far_type, 'far_strike': far_strike,
                 'far_instrument_key': far_instrument_key, 'far_entry_price': far_price,
                 'net_credit': net_credit, 'stop_loss_value': stop_loss_value,
+                'trailing_sl': stop_loss_value,
                 'profit_target_value': profit_target_value, 'sl_percent': sl_percent,
                 'lot_size': lot_size, 'entry_time': entry_time.isoformat(), 'expiry_date': expiry_date,
             }
             self.positions[symbol] = position
-            self.traded_today[symbol] = True
             self._persist_state()
 
             mongo_logger.log_trade(
@@ -258,7 +261,49 @@ class SupertrendStrategy:
     # ------------------------------------------------------------------
     # Exit checks
     # ------------------------------------------------------------------
-    def check_fixed_sl_and_target(self, symbol: str):
+    def _fetch_premium_supertrend(self, symbol: str):
+        """
+        Supertrend(SUPERTREND_PERIOD, SUPERTREND_MULTIPLIER) computed on the
+        sold (near) leg's OWN premium candles - separate from the underlying
+        futures Supertrend used for strike selection. Same-day-only, like the
+        futures fetch (see futures_data.py), since the option didn't exist
+        before today and Dhan's intraday_minute_data only returns today's
+        data on this account regardless. Returns None (not just during
+        warmup, but on any fetch failure) so the caller falls back to the
+        percentage-only SL candidate.
+        """
+        position = self.positions[symbol]
+        if position is None:
+            return None
+        try:
+            time.sleep(config.CANDLE_FETCH_RATE_LIMIT_SECS)
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            df = dhan_client.get_historical_data(
+                position['near_instrument_key'], config.SUPERTREND_CANDLE_INTERVAL,
+                from_date=today_str, to_date=today_str, instrument_type="OPTIDX",
+            )
+            if df is None or df.empty:
+                return None
+
+            df = Indicators.calculate_supertrend(df, period=config.SUPERTREND_PERIOD, multiplier=config.SUPERTREND_MULTIPLIER)
+            valid = df.dropna(subset=['supertrend'])
+            if valid.empty:
+                return None
+            return float(valid.iloc[-1]['supertrend'])
+
+        except Exception as e:
+            logger.error(f"[Supertrend] Error fetching premium Supertrend for {symbol}: {str(e)}")
+            return None
+
+    def check_trailing_sl_and_target(self, symbol: str):
+        """
+        Trailing SL = min(current_price * (1 + sl_percent/100), Supertrend of
+        the premium's own candles), ratcheted so it only ever tightens toward
+        price, never loosens. Until the premium Supertrend has enough candles
+        to be valid, the percentage side is used on its own. Exit fires when
+        price rises to meet the trailing SL, or the profit target is hit -
+        no other exit path (the old trend-flip exit has been removed).
+        """
         position = self.positions[symbol]
         if position is None:
             return
@@ -267,8 +312,17 @@ class SupertrendStrategy:
             if near_price is None:
                 return
 
-            if near_price >= position['stop_loss_value']:
-                self.simulate_exit(symbol, "Stop Loss")
+            pct_candidate = near_price * (1 + position['sl_percent'] / 100.0)
+            st_value = self._fetch_premium_supertrend(symbol)
+            floor_candidate = pct_candidate if st_value is None else min(pct_candidate, st_value)
+
+            new_trailing_sl = min(position['trailing_sl'], floor_candidate)
+            if new_trailing_sl != position['trailing_sl']:
+                position['trailing_sl'] = new_trailing_sl
+                self._persist_state()
+
+            if near_price >= position['trailing_sl']:
+                self.simulate_exit(symbol, "Trailing Stop Loss")
                 return
 
             far_price = data_manager.get_latest_price_from_websocket(position['far_instrument_key']) or dhan_client.get_current_price(position['far_instrument_key'])
@@ -278,38 +332,7 @@ class SupertrendStrategy:
                     self.simulate_exit(symbol, "Profit Target")
 
         except Exception as e:
-            logger.error(f"[Supertrend] Error checking SL/target for {symbol}: {str(e)}")
-
-    def check_trend_flip_exit(self, symbol: str, closed_candle):
-        """
-        Exit only on an actual trend REVERSAL, not continuation. In an uptrend
-        the Supertrend line sits below price (support); a short PE exits when
-        price closes BELOW it (support breaking = trend reversing down).
-        Mirrored for a downtrend/short CE (resistance breaking = reversing up).
-
-        NOTE: this is the opposite of close_price > supertrend_value for the
-        'up' case - that condition is true on almost every candle during a
-        stable uptrend (price naturally sits above its own support line),
-        which caused positions to exit within one candle of entry almost
-        every time - caught via a local replay against real historical spot
-        data before this ever ran live. Confirmed fix 2026-07-24.
-        """
-        position = self.positions[symbol]
-        if position is None:
-            return
-        try:
-            close_price = closed_candle.get('close')
-            supertrend_value = closed_candle.get('supertrend')
-            if close_price is None or supertrend_value is None:
-                return
-
-            if position['direction'] == 'up' and close_price < supertrend_value:
-                self.simulate_exit(symbol, "Trend Flip (candle close below Supertrend)")
-            elif position['direction'] == 'down' and close_price > supertrend_value:
-                self.simulate_exit(symbol, "Trend Flip (candle close above Supertrend)")
-
-        except Exception as e:
-            logger.error(f"[Supertrend] Error checking trend-flip exit for {symbol}: {str(e)}")
+            logger.error(f"[Supertrend] Error checking trailing SL/target for {symbol}: {str(e)}")
 
     def simulate_exit(self, symbol: str, exit_reason: str):
         position = self.positions[symbol]
@@ -369,20 +392,19 @@ class SupertrendStrategy:
             if not enabled:
                 continue
 
-            # Frequent fixed SL/target check, independent of candle-close cadence
             if self.positions[symbol] is not None:
-                self.check_fixed_sl_and_target(symbol)
+                # Trailing SL/target check, independent of candle-close cadence.
+                # No trend-flip exit anymore, so no need to fetch futures candles
+                # while a position is open.
+                self.check_trailing_sl_and_target(symbol)
+                continue
 
-            # Candle-close-driven entry/trend-flip check
+            # Candle-close-driven entry check
             df = self.fetch_supertrend_df(symbol)
             closed_candle = self.poll_for_new_closed_candle(symbol, df)
             if closed_candle is None:
                 continue
-
-            if self.positions[symbol] is not None:
-                self.check_trend_flip_exit(symbol, closed_candle)
-            else:
-                self.evaluate_entry(symbol, closed_candle)
+            self.evaluate_entry(symbol, closed_candle)
 
 
 supertrend_strategy = SupertrendStrategy()
