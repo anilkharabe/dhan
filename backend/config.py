@@ -224,6 +224,13 @@ NOTIFY_TRADE_EXIT = True
 NOTIFY_ERRORS = True
 NOTIFY_DAILY_SUMMARY = True
 
+# How long (seconds) to suppress repeated Telegram error alerts sharing the
+# same error_type + error_message (e.g. a crash-loop retrying the same
+# failure every few seconds). First occurrence sends immediately; further
+# identical occurrences within the window are counted, not sent; the next
+# alert that does go out reports how many were swallowed.
+ERROR_ALERT_COOLDOWN_SECONDS = 900  # 15 minutes
+
 # ============================================================================
 # LOGGING CONFIGURATION
 # ============================================================================

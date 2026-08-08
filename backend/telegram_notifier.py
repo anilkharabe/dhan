@@ -16,9 +16,15 @@ class TelegramNotifier:
         self.bot_token = config.TELEGRAM_BOT_TOKEN
         self.chat_id = config.TELEGRAM_CHAT_ID
         self.enabled = config.TELEGRAM_ENABLED and bool(self.bot_token) and bool(self.chat_id)
-        
+
         if not self.enabled:
             logger.warning("Telegram notifications disabled (token or chat_id not configured)")
+
+        # De-dup/cooldown state for send_error(), keyed by "error_type|error_message".
+        # Process-local (resets on restart) - the main threat this defends
+        # against is a restart-loop, where a fresh process starting a fresh
+        # loop is exactly the "first occurrence, alert immediately" case.
+        self._error_alert_state: Dict[str, Dict] = {}
     
     def _escape_html(self, text: str) -> str:
         """
@@ -188,22 +194,53 @@ class TelegramNotifier:
         self._send_message(message)
     
     def send_error(self, error_type: str, error_message: str, timestamp: Optional[datetime] = None):
-        """Send error notification"""
-        
+        """
+        Send error notification, with cooldown-based de-duplication so a
+        crash-loop (or any other rapid-repeat failure) collapses into a
+        single Telegram alert instead of spamming one message per occurrence.
+        See config.ERROR_ALERT_COOLDOWN_SECONDS.
+        """
+
         if not config.NOTIFY_ERRORS:
             return
-        
+
         if timestamp is None:
             timestamp = datetime.now()
-        
+
+        now = datetime.now()
+        key = f"{error_type}|{error_message}"
+        state = self._error_alert_state.get(key)
+
+        if state and (now - state['last_alert_at']).total_seconds() < config.ERROR_ALERT_COOLDOWN_SECONDS:
+            # Identical error_type+message seen again inside the cooldown
+            # window - suppress the send, but keep counting so the next
+            # alert that does go out can report what was swallowed.
+            state['suppressed_count'] += 1
+            logger.debug(
+                f"Suppressing duplicate Telegram error alert '{error_type}' "
+                f"(#{state['suppressed_count']} suppressed since {state['last_alert_at']})"
+            )
+            return
+
+        suppressed_count = state['suppressed_count'] if state else 0
+        repeat_note = ""
+        if suppressed_count > 0:
+            repeat_note = (
+                f"<b>Repeated:</b> {suppressed_count} more time(s) since "
+                f"{state['last_alert_at'].strftime('%H:%M:%S')}\n"
+            )
+
         message = (
             f"⚠️ <b>ERROR ALERT</b> ⚠️\n\n"
             f"<b>Type:</b> {self._escape_html(error_type)}\n"
             f"<b>Message:</b> {self._escape_html(error_message)}\n"
+            f"{repeat_note}"
             f"<b>Time:</b> {timestamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
         )
-        
+
         self._send_message(message)
+
+        self._error_alert_state[key] = {'last_alert_at': now, 'suppressed_count': 0}
     
     def send_daily_summary(self, summary: Dict):
         """Send daily trading summary"""

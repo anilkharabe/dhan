@@ -96,7 +96,7 @@ class AlgoTradingSystem:
                     return False
                 
                 # Allow initialization anytime during market hours (9:15 AM to 3:15 PM)
-                market_open_time = time(9, 15, 0)
+                market_open_time = config.MARKET_OPEN_TIME
                 if current_time < market_open_time:
                     logger.error(f"Market hasn't opened yet. Current time: {current_time}, Market opens at: {market_open_time}")
                     return False
@@ -842,12 +842,35 @@ class AlgoTradingSystem:
     def start(self):
         """Start the trading system"""
         try:
-            # Outside market hours, skip live initialization (it requires a
-            # live NIFTY price fetch) and fall back to replaying today's
-            # cached candles for analysis instead of refusing to start.
-            if not config.TEST_MODE and datetime.now().time() > config.TRADING_END_TIME:
-                self.run_post_market_analysis()
-                return
+            # Outside market hours there are two distinct dead windows, and
+            # they need different handling - a bare `.time() > TRADING_END_TIME`
+            # check wraps incorrectly at midnight (00:00:01 is NOT > 15:25:00),
+            # so a PM2 restart landing any time after the EOD sys.exit(0) and
+            # before the next 09:15 open would otherwise fall all the way
+            # through into initialize()'s live Dhan token-validation API call.
+            if not config.TEST_MODE:
+                now_time = datetime.now().time()
+
+                # Same-day post-close (15:25-23:59): today's candles already
+                # exist in Mongo - safe to replay for analysis, no live calls.
+                if now_time > config.TRADING_END_TIME:
+                    self.run_post_market_analysis()
+                    return
+
+                # Pre-open dead zone (00:00-09:15): "today" hasn't traded yet
+                # (nothing cached to analyze) and initialize() cannot succeed
+                # in this window anyway (its own market-open gate rejects it)
+                # - skip silently instead of hitting Dhan/Telegram for nothing.
+                # The 9 AM token-refresh cron brings the system up for real.
+                if now_time < config.MARKET_OPEN_TIME:
+                    logger.info(
+                        f"⏳ Outside market hours (pre-open). Current time: "
+                        f"{now_time.strftime('%H:%M:%S')}, market opens at "
+                        f"{config.MARKET_OPEN_TIME.strftime('%H:%M:%S')}. "
+                        f"Skipping initialization - the 9 AM token/start cron "
+                        f"will bring the system up."
+                    )
+                    return
 
             # Initialize system
             if not self.initialize():
