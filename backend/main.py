@@ -802,6 +802,32 @@ class AlgoTradingSystem:
             logger.error(f"Error in end_of_day_routine: {str(e)}")
             telegram_notifier.send_error("EOD Routine", str(e))
     
+    def _reconcile_orphaned_positions(self):
+        """
+        Safety net for the two "market closed, skip real init" branches in
+        start(): a position only ever gets its scheduled EOD square-off
+        (end_of_day_routine / _supertrend_eod) if this process stays alive
+        continuously through TRADING_END_TIME. If it crashed/restarted and
+        landed here instead, nothing else in the codebase will ever close
+        that position - supertrend_strategy.restore_state() silently
+        discards state from a stale date without closing it, and neither
+        skip-path calls initialize() so the scheduled EOD jobs never even
+        get registered. Reuse the same "crash recovery" mechanism the
+        manual admin Close-All-Positions button uses, so a position can't
+        be left open indefinitely just because the process wasn't alive at
+        the exact moment its EOD job was due to fire.
+        """
+        try:
+            count = mongo_logger.close_all_open_positions(reason="Orphaned - EOD square-off missed (process restarted outside trading hours)")
+            if count > 0:
+                logger.warning(f"⚠️ Force-closed {count} orphaned open position(s) from a missed EOD square-off")
+                telegram_notifier.send_error(
+                    "Orphaned Position Reconciliation",
+                    f"Force-closed {count} position(s) that were never squared off - the process wasn't alive at their scheduled EOD time."
+                )
+        except Exception as e:
+            logger.error(f"Error reconciling orphaned positions: {str(e)}")
+
     def run_post_market_analysis(self):
         """
         Post-market entry point: called instead of the live trade loop when
@@ -854,6 +880,7 @@ class AlgoTradingSystem:
                 # Same-day post-close (15:25-23:59): today's candles already
                 # exist in Mongo - safe to replay for analysis, no live calls.
                 if now_time > config.TRADING_END_TIME:
+                    self._reconcile_orphaned_positions()
                     self.run_post_market_analysis()
                     return
 
@@ -863,6 +890,7 @@ class AlgoTradingSystem:
                 # - skip silently instead of hitting Dhan/Telegram for nothing.
                 # The 9 AM token-refresh cron brings the system up for real.
                 if now_time < config.MARKET_OPEN_TIME:
+                    self._reconcile_orphaned_positions()
                     logger.info(
                         f"⏳ Outside market hours (pre-open). Current time: "
                         f"{now_time.strftime('%H:%M:%S')}, market opens at "
