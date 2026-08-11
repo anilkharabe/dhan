@@ -223,7 +223,7 @@ const GroupHeader = ({ pos, combinedPnl, slReferenceValue }) => {
             })()}
             {isSpread && (
               <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold border-2 bg-gradient-to-r from-teal-100 to-emerald-100 text-teal-800 border-teal-300">
-                {pos.spread_type === 'BULL_PUT' ? 'BULL PUT SPREAD' : pos.spread_type === 'BEAR_CALL' ? 'BEAR CALL SPREAD' : pos.spread_type}
+                {pos.spread_type === 'SHORT_PUT_SPREAD' ? 'SHORT PUT SPREAD' : pos.spread_type === 'SHORT_CALL_SPREAD' ? 'SHORT CALL SPREAD' : pos.spread_type}
               </span>
             )}
             {isSpread && (

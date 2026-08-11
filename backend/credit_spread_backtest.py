@@ -68,7 +68,7 @@ def _simulate_spread(
     far_entry_price = float(far_at_entry.iloc[0]['close'])
     net_credit = near_entry_price - far_entry_price
 
-    near_option_type = "PUT" if spread_type == "BULL_PUT" else "CALL"
+    near_option_type = "PUT" if spread_type == "SHORT_PUT_SPREAD" else "CALL"
     far_option_type = near_option_type
 
     if net_credit <= 0:
@@ -216,11 +216,14 @@ def _simulate_index(symbol: str, date_str: str, sl_pct: float, target_pct: float
 
     trades = []
 
+    # Direct mapping (no mirror-flip, matches main.py::scan_and_trade): a CALL
+    # signal shorts the CALL strike itself; a PUT signal shorts the PUT strike
+    # itself - the traded contract is always the one whose own data triggered it.
     call_signal = _replay_signal(call_df, "CALL")
     if call_signal is not None:
         idx, cond = call_signal
         entry_time = call_df.index[idx]
-        trade = _simulate_spread(entry_time, "BULL_PUT", "CALL", put_strike, put_df, far_put_strike, far_put_df,
+        trade = _simulate_spread(entry_time, "SHORT_CALL_SPREAD", "CALL", call_strike, call_df, far_call_strike, far_call_df,
                                   sl_pct, target_pct, symbol, cond)
         if trade:
             trades.append(trade)
@@ -229,7 +232,7 @@ def _simulate_index(symbol: str, date_str: str, sl_pct: float, target_pct: float
     if put_signal is not None:
         idx, cond = put_signal
         entry_time = put_df.index[idx]
-        trade = _simulate_spread(entry_time, "BEAR_CALL", "PUT", call_strike, call_df, far_call_strike, far_call_df,
+        trade = _simulate_spread(entry_time, "SHORT_PUT_SPREAD", "PUT", put_strike, put_df, far_put_strike, far_put_df,
                                   sl_pct, target_pct, symbol, cond)
         if trade:
             trades.append(trade)

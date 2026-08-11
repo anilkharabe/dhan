@@ -101,7 +101,7 @@ function TradeRow({ t, idx }) {
                 <td className="px-3 py-2.5">
                     {t.is_spread ? (
                         <span className="font-bold text-xs px-1.5 py-0.5 rounded bg-teal-50 text-teal-700">
-                            {t.spread_type === 'BULL_PUT' ? 'BULL PUT' : t.spread_type === 'BEAR_CALL' ? 'BEAR CALL' : t.spread_type}
+                            {t.spread_type === 'SHORT_PUT_SPREAD' ? 'SHORT PUT' : t.spread_type === 'SHORT_CALL_SPREAD' ? 'SHORT CALL' : t.spread_type}
                         </span>
                     ) : (
                         <span className={`font-bold text-xs px-1.5 py-0.5 rounded ${t.option_type === 'CE' || t.option_type === 'CALL' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>

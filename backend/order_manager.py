@@ -153,9 +153,9 @@ class OrderManager:
 
         Args:
             signal_type: "CALL" or "PUT" - which signal triggered this (used for
-                active_positions bucketing / duplicate-signal checks - NOT the same
-                as near_option_type, since a CALL signal sells a PUT spread)
-            spread_type: "BULL_PUT" or "BEAR_CALL"
+                active_positions bucketing / duplicate-signal checks; direct mapping,
+                so signal_type="CALL" implies near_option_type="CALL" too)
+            spread_type: "SHORT_PUT_SPREAD" or "SHORT_CALL_SPREAD"
             near_option_type/near_strike: the SOLD leg
             far_option_type/far_strike: the BOUGHT hedge leg
             conditions/df: signal data from the ORIGINATING contract (for logging only -

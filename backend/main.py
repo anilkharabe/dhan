@@ -535,7 +535,9 @@ class AlgoTradingSystem:
                 
                 nifty_strategies = config.CREDIT_SPREAD_STRATEGIES
 
-                # Execute NIFTY CALL signal - sells a Bull Put Spread
+                # Execute NIFTY CALL signal - sells a Short Call Spread (direct mapping,
+                # no mirror-flip: the contract whose own weakness triggered the signal
+                # is the one that gets shorted).
                 if nifty_signals['call_signal'] and not nifty_has_position:
                     entry_price = nifty_signals['call_conditions'].get('close')
                     vol = float(nifty_signals['call_conditions'].get('volume') or 0)
@@ -558,11 +560,11 @@ class AlgoTradingSystem:
                         if order_manager.has_position("CALL", "NIFTY", strat_tag):
                             continue
 
-                        logger.info(f"🚀 [{strat_tag}] Entering NIFTY Bull Put Spread (CALL signal)")
+                        logger.info(f"🚀 [{strat_tag}] Entering NIFTY Short Call Spread (CALL signal)")
                         order_manager.place_credit_spread(
-                            signal_type="CALL", spread_type="BULL_PUT",
-                            near_option_type="PUT", near_strike=self.nifty_put_strike,
-                            far_option_type="PUT", far_strike=self.nifty_put_strike - config.SPREAD_WIDTH_NIFTY,
+                            signal_type="CALL", spread_type="SHORT_CALL_SPREAD",
+                            near_option_type="CALL", near_strike=self.nifty_call_strike,
+                            far_option_type="CALL", far_strike=self.nifty_call_strike + config.SPREAD_WIDTH_NIFTY,
                             expiry_date=self.nifty_expiry_date,
                             lot_size=config.NIFTY_LOT_MULTIPLIER * config.NIFTY_LOT_SIZE,
                             conditions=nifty_signals['call_conditions'],
@@ -570,7 +572,13 @@ class AlgoTradingSystem:
                             symbol="NIFTY", strategy_tag=strat_tag
                         )
 
-                # Execute NIFTY PUT signal - sells a Bear Call Spread
+                    # Re-check position state: if the entry above just opened a
+                    # position, the CALL signal wins this cycle - the PUT block
+                    # below must not also enter (no simultaneous CE+PE).
+                    nifty_has_position = order_manager.has_any_position_for_symbol("NIFTY")
+
+                # Execute NIFTY PUT signal - sells a Short Put Spread (direct mapping,
+                # no mirror-flip).
                 if nifty_signals['put_signal'] and not nifty_has_position:
                     entry_price = nifty_signals['put_conditions'].get('close')
                     vol = float(nifty_signals['put_conditions'].get('volume') or 0)
@@ -593,11 +601,11 @@ class AlgoTradingSystem:
                         if order_manager.has_position("PUT", "NIFTY", strat_tag):
                             continue
 
-                        logger.info(f"🚀 [{strat_tag}] Entering NIFTY Bear Call Spread (PUT signal)")
+                        logger.info(f"🚀 [{strat_tag}] Entering NIFTY Short Put Spread (PUT signal)")
                         order_manager.place_credit_spread(
-                            signal_type="PUT", spread_type="BEAR_CALL",
-                            near_option_type="CALL", near_strike=self.nifty_call_strike,
-                            far_option_type="CALL", far_strike=self.nifty_call_strike + config.SPREAD_WIDTH_NIFTY,
+                            signal_type="PUT", spread_type="SHORT_PUT_SPREAD",
+                            near_option_type="PUT", near_strike=self.nifty_put_strike,
+                            far_option_type="PUT", far_strike=self.nifty_put_strike - config.SPREAD_WIDTH_NIFTY,
                             expiry_date=self.nifty_expiry_date,
                             lot_size=config.NIFTY_LOT_MULTIPLIER * config.NIFTY_LOT_SIZE,
                             conditions=nifty_signals['put_conditions'],
@@ -631,7 +639,8 @@ class AlgoTradingSystem:
                 
                 sensex_strategies = config.CREDIT_SPREAD_STRATEGIES
 
-                # Execute SENSEX CALL signal - sells a Bull Put Spread
+                # Execute SENSEX CALL signal - sells a Short Call Spread (direct
+                # mapping, no mirror-flip).
                 if sensex_signals['call_signal'] and not sensex_has_position:
                     entry_price = sensex_signals['call_conditions'].get('close')
                     vol = float(sensex_signals['call_conditions'].get('volume') or 0)
@@ -654,11 +663,11 @@ class AlgoTradingSystem:
                         if order_manager.has_position("CALL", "SENSEX", strat_tag):
                             continue
 
-                        logger.info(f"🚀 [{strat_tag}] Entering SENSEX Bull Put Spread (CALL signal)")
+                        logger.info(f"🚀 [{strat_tag}] Entering SENSEX Short Call Spread (CALL signal)")
                         order_manager.place_credit_spread(
-                            signal_type="CALL", spread_type="BULL_PUT",
-                            near_option_type="PUT", near_strike=self.sensex_put_strike,
-                            far_option_type="PUT", far_strike=self.sensex_put_strike - config.SPREAD_WIDTH_SENSEX,
+                            signal_type="CALL", spread_type="SHORT_CALL_SPREAD",
+                            near_option_type="CALL", near_strike=self.sensex_call_strike,
+                            far_option_type="CALL", far_strike=self.sensex_call_strike + config.SPREAD_WIDTH_SENSEX,
                             expiry_date=self.sensex_expiry_date,
                             lot_size=config.SENSEX_LOT_MULTIPLIER * config.SENSEX_LOT_SIZE,
                             conditions=sensex_signals['call_conditions'],
@@ -666,7 +675,13 @@ class AlgoTradingSystem:
                             symbol="SENSEX", strategy_tag=strat_tag
                         )
 
-                # Execute SENSEX PUT signal - sells a Bear Call Spread
+                    # Re-check position state: if the entry above just opened a
+                    # position, the CALL signal wins this cycle - the PUT block
+                    # below must not also enter (no simultaneous CE+PE).
+                    sensex_has_position = order_manager.has_any_position_for_symbol("SENSEX")
+
+                # Execute SENSEX PUT signal - sells a Short Put Spread (direct
+                # mapping, no mirror-flip).
                 if sensex_signals['put_signal'] and not sensex_has_position:
                     entry_price = sensex_signals['put_conditions'].get('close')
                     vol = float(sensex_signals['put_conditions'].get('volume') or 0)
@@ -689,11 +704,11 @@ class AlgoTradingSystem:
                         if order_manager.has_position("PUT", "SENSEX", strat_tag):
                             continue
 
-                        logger.info(f"🚀 [{strat_tag}] Entering SENSEX Bear Call Spread (PUT signal)")
+                        logger.info(f"🚀 [{strat_tag}] Entering SENSEX Short Put Spread (PUT signal)")
                         order_manager.place_credit_spread(
-                            signal_type="PUT", spread_type="BEAR_CALL",
-                            near_option_type="CALL", near_strike=self.sensex_call_strike,
-                            far_option_type="CALL", far_strike=self.sensex_call_strike + config.SPREAD_WIDTH_SENSEX,
+                            signal_type="PUT", spread_type="SHORT_PUT_SPREAD",
+                            near_option_type="PUT", near_strike=self.sensex_put_strike,
+                            far_option_type="PUT", far_strike=self.sensex_put_strike - config.SPREAD_WIDTH_SENSEX,
                             expiry_date=self.sensex_expiry_date,
                             lot_size=config.SENSEX_LOT_MULTIPLIER * config.SENSEX_LOT_SIZE,
                             conditions=sensex_signals['put_conditions'],

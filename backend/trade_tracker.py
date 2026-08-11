@@ -53,11 +53,12 @@ class TradeTracker:
         Log a new credit-spread trade entry (two legs: sold near leg + bought hedge leg).
 
         Args:
-            spread_type: "BULL_PUT" or "BEAR_CALL"
-            signal_type: "CALL" or "PUT" - which signal triggered this (NOT the same as
-                near_option_type: a CALL signal sells a PUT spread, so signal_type="CALL"
-                but near_option_type="PUT". Used for active_positions bucketing / duplicate
-                signal checks, which key off the signal that was acted on, not the leg traded.
+            spread_type: "SHORT_PUT_SPREAD" or "SHORT_CALL_SPREAD"
+            signal_type: "CALL" or "PUT" - which signal triggered this (direct mapping:
+                a CALL signal sells a CALL spread, so signal_type="CALL" and
+                near_option_type="CALL" - kept as a separate field since it's used for
+                active_positions bucketing / duplicate-signal checks, which key off the
+                signal that was acted on, not the leg traded.
             near_option_type/near_strike: the SOLD leg (collects premium)
             far_option_type/far_strike: the BOUGHT hedge leg (caps max loss)
             near_entry_price/far_entry_price: each leg's fill price
@@ -397,26 +398,26 @@ if __name__ == "__main__":
     # Add sample trades
     now = datetime.now()
     
-    # Trade 1: Bull Put Spread (CALL signal)
+    # Trade 1: Short Call Spread (CALL signal - direct mapping)
     trade_id_1 = trade_tracker.add_spread_trade_entry(
-        spread_type="BULL_PUT", symbol="NIFTY", signal_type="CALL",
-        near_option_type="PUT", near_strike=25550,
-        far_option_type="PUT", far_strike=25150,
+        spread_type="SHORT_CALL_SPREAD", symbol="NIFTY", signal_type="CALL",
+        near_option_type="CALL", near_strike=25600,
+        far_option_type="CALL", far_strike=26000,
         near_entry_price=150.50, far_entry_price=90.0,
         net_credit=60.50, stop_loss_value=121.0, profit_target_value=30.25,
         entry_time=now, expiry_date="2025-02-11", lot_size=1,
-        conditions={'vwap': 148.0, 'rsi': 65.5, 'oi': 50000, 'oi_sma': 55000}
+        conditions={'vwap': 148.0, 'rsi': 35.5, 'oi': 55000, 'oi_sma': 50000}
     )
 
-    # Trade 2: Bear Call Spread (PUT signal)
+    # Trade 2: Short Put Spread (PUT signal - direct mapping)
     trade_id_2 = trade_tracker.add_spread_trade_entry(
-        spread_type="BEAR_CALL", symbol="NIFTY", signal_type="PUT",
-        near_option_type="CALL", near_strike=25600,
-        far_option_type="CALL", far_strike=26000,
+        spread_type="SHORT_PUT_SPREAD", symbol="NIFTY", signal_type="PUT",
+        near_option_type="PUT", near_strike=25550,
+        far_option_type="PUT", far_strike=25150,
         near_entry_price=135.75, far_entry_price=80.0,
         net_credit=55.75, stop_loss_value=111.5, profit_target_value=27.88,
         entry_time=now + timedelta(minutes=30), expiry_date="2025-02-11", lot_size=1,
-        conditions={'vwap': 133.0, 'rsi': 62.0, 'oi': 48000, 'oi_sma': 52000}
+        conditions={'vwap': 133.0, 'rsi': 38.0, 'oi': 52000, 'oi_sma': 48000}
     )
 
     # Close trades

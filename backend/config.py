@@ -128,9 +128,13 @@ INITIAL_VIRTUAL_FUND = 900000  # Initial trading account balance (1,00,000 per s
 # CREDIT SPREAD CONFIGURATION
 # ============================================================================
 # Defined-risk vertical spreads: sell a near strike, buy a further-OTM strike as a
-# hedge. The OI-divergence signal engine determines direction - a CALL signal
-# sells a Bull Put Spread; a PUT signal sells a Bear Call Spread.
-# See order_manager.py:place_credit_spread().
+# hedge. The OI-divergence signal engine determines direction with a direct
+# mapping (no mirror-flip) - a CALL signal (ATM CALL contract shows weakness)
+# sells a SHORT_CALL_SPREAD on that same CALL strike; a PUT signal sells a
+# SHORT_PUT_SPREAD on that same PUT strike. Whichever signal fires first in a
+# scan cycle wins - main.py re-checks position state between the two blocks so
+# NIFTY/SENSEX never end up holding both a CE and PE spread at once.
+# See order_manager.py:place_credit_spread() and main.py:scan_and_trade().
 
 # Hedge leg distance from the sold strike, in index points (sets max loss = width - net credit)
 SPREAD_WIDTH_NIFTY = 400
