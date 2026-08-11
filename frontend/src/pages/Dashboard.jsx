@@ -280,7 +280,7 @@ function Dashboard() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
 
             {/* Token Expired Modal */}
             <TokenExpiredModal
@@ -289,33 +289,31 @@ function Dashboard() {
             />
 
             {/* Header Info */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-800">
-                            Live Trading
-                        </h1>
-                        <p className="text-sm text-gray-500">
-                            Real-time market analysis and execution
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        {isRefreshing && (
-                            <div className="flex items-center gap-2 text-blue-600">
-                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
-                                <span className="text-sm font-medium">Refreshing...</span>
-                            </div>
-                        )}
-                        {lastUpdate && (
-                            <div className="text-right">
-                                <p className="text-xs text-gray-500">Last updated</p>
-                                <p className="text-sm font-bold text-gray-800 flex items-center gap-2 justify-end">
-                                    <span className={`w-2 h-2 ${wsConnected ? 'bg-green-500' : 'bg-amber-500'} rounded-full animate-pulse`}></span>
-                                    {lastUpdate.toLocaleTimeString()}
-                                </p>
-                            </div>
-                        )}
-                    </div>
+            <div className="flex justify-between items-center pb-1">
+                <div>
+                    <h1 className="text-lg font-semibold text-gray-900">
+                        Live Trading
+                    </h1>
+                    <p className="text-xs text-gray-500">
+                        Real-time market analysis and execution
+                    </p>
+                </div>
+                <div className="flex items-center gap-4">
+                    {isRefreshing && (
+                        <div className="flex items-center gap-2 text-blue-600">
+                            <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-blue-600 border-t-transparent"></div>
+                            <span className="text-xs font-medium">Refreshing...</span>
+                        </div>
+                    )}
+                    {lastUpdate && (
+                        <div className="text-right">
+                            <p className="text-[11px] text-gray-400">Last updated</p>
+                            <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5 justify-end">
+                                <span className={`w-1.5 h-1.5 ${wsConnected ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full animate-pulse`}></span>
+                                {lastUpdate.toLocaleTimeString()}
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -340,9 +338,9 @@ function Dashboard() {
 
 
             {/* Live Price Chart with Selection */}
-            <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
-                    <h2 className="text-lg font-bold text-gray-700">Live Chart</h2>
+                    <h2 className="text-sm font-semibold text-gray-800">Live Chart</h2>
 
                     {/* Chart Selector */}
                     <div className="flex bg-gray-100 rounded-lg p-1 gap-1 overflow-x-auto">

@@ -97,7 +97,7 @@ const LiveTickerBar = ({ ticks, connected, error, tickCount, selectedInstruments
     }, [ticks, selectedInstruments]);
 
     return (
-        <div className="bg-gradient-to-r from-gray-900 via-slate-900 to-gray-900 rounded-xl shadow-2xl border border-gray-700/50 overflow-hidden flex flex-col w-full">
+        <div className="bg-gray-900 rounded-lg shadow-sm border border-gray-700/50 overflow-hidden flex flex-col w-full">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-2 border-b border-gray-700/50 bg-black/20">
                 <div className="flex items-center gap-3">

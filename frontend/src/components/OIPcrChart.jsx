@@ -12,9 +12,9 @@ const OIPcrChart = ({ oiPcrData }) => {
 
   if (!oiPcrData) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-        <h2 className="text-2xl font-bold mb-4">OI Put-Call Ratio</h2>
-        <p className="text-gray-500">Loading OI PCR data...</p>
+      <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-200">
+        <h2 className="text-sm font-semibold text-gray-800 mb-3">OI Put-Call Ratio</h2>
+        <p className="text-sm text-gray-500">Loading OI PCR data...</p>
       </div>
     );
   }
@@ -51,10 +51,10 @@ const OIPcrChart = ({ oiPcrData }) => {
   };
 
   const getPcrBgColor = (value) => {
-    if (!value) return 'bg-gray-100';
-    if (value < 0.8) return 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-300';
-    if (value > 1.2) return 'bg-gradient-to-r from-red-50 to-rose-50 border-red-300';
-    return 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300';
+    if (!value) return 'bg-gray-50 border-gray-200';
+    if (value < 0.8) return 'bg-blue-50 border-blue-200';
+    if (value > 1.2) return 'bg-red-50 border-red-200';
+    return 'bg-emerald-50 border-emerald-200';
   };
 
   const getPcrLabel = (value) => {
@@ -67,10 +67,10 @@ const OIPcrChart = ({ oiPcrData }) => {
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white border-2 border-gray-200 rounded-lg shadow-xl p-3">
-          <p className="font-bold text-gray-800 mb-1">{label}</p>
+        <div className="bg-white border border-gray-200 rounded-lg shadow-md p-3">
+          <p className="font-semibold text-gray-800 mb-1 text-sm">{label}</p>
           {payload.map((p) => (
-            <p key={p.dataKey} className="text-sm font-bold" style={{ color: p.color }}>
+            <p key={p.dataKey} className="text-xs font-semibold" style={{ color: p.color }}>
               {p.dataKey === 'full' ? 'Full Chain' : 'ATM±5'}: {p.value != null ? p.value.toFixed(3) : '—'}
             </p>
           ))}
@@ -81,17 +81,17 @@ const OIPcrChart = ({ oiPcrData }) => {
   };
 
   const CurrentBadge = ({ atm5, full }) => (
-    <div className="text-right bg-white rounded-lg px-4 py-2 border-2 border-gray-200 shadow-md">
+    <div className="text-right bg-white rounded-md px-3 py-2 border border-gray-200">
       {full != null && (
         <div>
-          <span className={`text-2xl font-bold ${getPcrColor(full)}`}>{full.toFixed(3)}</span>
+          <span className={`text-xl font-bold ${getPcrColor(full)} tabular-nums`}>{full.toFixed(3)}</span>
           <span className="text-[10px] text-gray-400 font-semibold ml-1">FULL</span>
-          <p className={`text-xs font-bold ${getPcrColor(full)}`}>{getPcrLabel(full)}</p>
+          <p className={`text-xs font-semibold ${getPcrColor(full)}`}>{getPcrLabel(full)}</p>
         </div>
       )}
       {atm5 != null && (
-        <p className="text-xs text-gray-500 font-medium mt-1">
-          ATM±5: <span className="font-bold text-gray-700">{atm5.toFixed(3)}</span>
+        <p className="text-xs text-gray-500 font-medium mt-1 tabular-nums">
+          ATM±5: <span className="font-semibold text-gray-700">{atm5.toFixed(3)}</span>
         </p>
       )}
     </div>
@@ -136,17 +136,17 @@ const OIPcrChart = ({ oiPcrData }) => {
   );
 
   return (
-    <div className="bg-white rounded-xl shadow-xl p-6 border border-gray-100 transform transition-all hover:shadow-2xl">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+    <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-200">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+          <h2 className="text-sm font-semibold text-gray-800">
             OI Put-Call Ratio
           </h2>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-400 mt-0.5">
             Full Chain = every strike (matches Upstox/NSE) · ATM±5 = 11 strikes around spot (dashed)
           </p>
         </div>
-        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1 shrink-0">
+        <div className="inline-flex rounded-md border border-gray-200 bg-gray-50 p-1 shrink-0">
           {VIEW_MODES.map((m) => (
             <button
               key={m.key}
@@ -167,10 +167,10 @@ const OIPcrChart = ({ oiPcrData }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         {/* Primary index PCR - NIFTY on Fri/Mon/Tue, SENSEX on Wed/Thu */}
         {primaryIndex === 'nifty' ? (
-          <div className={`border-2 rounded-xl p-5 ${getPcrBgColor(oiPcrData.nifty?.current_full)} transform transition-all hover:scale-105`}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2">
-                <span className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></span>
+          <div className={`border rounded-lg p-4 ${getPcrBgColor(oiPcrData.nifty?.current_full)}`}>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
+                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
                 NIFTY
               </h3>
               <CurrentBadge atm5={oiPcrData.nifty?.current_atm5} full={oiPcrData.nifty?.current_full} />
@@ -178,10 +178,10 @@ const OIPcrChart = ({ oiPcrData }) => {
             <IndexChart data={niftyData} colorFull="#3b82f6" colorAtm5="#93c5fd" />
           </div>
         ) : (
-          <div className={`border-2 rounded-xl p-5 ${getPcrBgColor(oiPcrData.sensex?.current_full)} transform transition-all hover:scale-105`}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2">
-                <span className="w-3 h-3 bg-purple-500 rounded-full animate-pulse"></span>
+          <div className={`border rounded-lg p-4 ${getPcrBgColor(oiPcrData.sensex?.current_full)}`}>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
+                <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></span>
                 SENSEX
               </h3>
               <CurrentBadge atm5={oiPcrData.sensex?.current_atm5} full={oiPcrData.sensex?.current_full} />
@@ -191,10 +191,10 @@ const OIPcrChart = ({ oiPcrData }) => {
         )}
 
         {/* Bank Nifty PCR - shown every day alongside whichever index is trading */}
-        <div className={`border-2 rounded-xl p-5 ${getPcrBgColor(oiPcrData.banknifty?.current_full)} transform transition-all hover:scale-105`}>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2">
-              <span className="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></span>
+        <div className={`border rounded-lg p-4 ${getPcrBgColor(oiPcrData.banknifty?.current_full)}`}>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
+              <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
               BANKNIFTY
             </h3>
             <CurrentBadge atm5={oiPcrData.banknifty?.current_atm5} full={oiPcrData.banknifty?.current_full} />
@@ -204,20 +204,20 @@ const OIPcrChart = ({ oiPcrData }) => {
       </div>
 
       {/* Legend */}
-      <div className="mt-6 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-4 border border-gray-200">
-        <p className="text-sm font-bold text-gray-700 mb-3">PCR Interpretation (Full Chain):</p>
+      <div className="mt-4 bg-gray-50 rounded-lg p-4 border border-gray-200">
+        <p className="text-xs font-semibold text-gray-600 mb-2.5">PCR Interpretation (Full Chain)</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="bg-white rounded-lg p-3 border-2 border-blue-200 transform transition-all hover:scale-105">
-            <span className="text-blue-600 font-bold">PCR &lt; 0.8</span>
-            <p className="text-xs text-gray-600 mt-1">Call heavy (bullish sentiment)</p>
+          <div className="bg-white rounded-md p-2.5 border border-gray-200">
+            <span className="text-blue-600 font-semibold text-sm">PCR &lt; 0.8</span>
+            <p className="text-xs text-gray-500 mt-0.5">Call heavy (bullish sentiment)</p>
           </div>
-          <div className="bg-white rounded-lg p-3 border-2 border-green-200 transform transition-all hover:scale-105">
-            <span className="text-green-600 font-bold">0.8 ≤ PCR ≤ 1.2</span>
-            <p className="text-xs text-gray-600 mt-1">Neutral zone</p>
+          <div className="bg-white rounded-md p-2.5 border border-gray-200">
+            <span className="text-emerald-600 font-semibold text-sm">0.8 ≤ PCR ≤ 1.2</span>
+            <p className="text-xs text-gray-500 mt-0.5">Neutral zone</p>
           </div>
-          <div className="bg-white rounded-lg p-3 border-2 border-red-200 transform transition-all hover:scale-105">
-            <span className="text-red-600 font-bold">PCR &gt; 1.2</span>
-            <p className="text-xs text-gray-600 mt-1">Put heavy (bearish sentiment)</p>
+          <div className="bg-white rounded-md p-2.5 border border-gray-200">
+            <span className="text-red-600 font-semibold text-sm">PCR &gt; 1.2</span>
+            <p className="text-xs text-gray-500 mt-0.5">Put heavy (bearish sentiment)</p>
           </div>
         </div>
       </div>

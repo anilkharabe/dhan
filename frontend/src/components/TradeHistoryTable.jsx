@@ -4,10 +4,10 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
     const [strategyFilter, setStrategyFilter] = useState('ALL');
     if (!trades || trades.length === 0) {
         return (
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 mt-8">
-                <h2 className="text-2xl font-bold mb-4">Trade History (Today)</h2>
+            <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-200">
+                <h2 className="text-sm font-semibold text-gray-800 mb-3">Trade History (Today)</h2>
                 <div className="text-center py-8">
-                    <p className="text-gray-500">No trades recorded for today yet.</p>
+                    <p className="text-gray-500 text-sm">No trades recorded for today yet.</p>
                 </div>
             </div>
         );
@@ -211,16 +211,16 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
     }, [events, strategyFilter]);
 
     return (
-        <div className="bg-white rounded-xl shadow-xl p-6 border border-gray-100 mt-8 transform transition-all hover:shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-                <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+        <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-gray-800">
                     Transactional History
                 </h2>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                     <select
                         value={strategyFilter}
                         onChange={(e) => setStrategyFilter(e.target.value)}
-                        className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 font-semibold"
+                        className="bg-gray-50 border border-gray-200 text-gray-700 text-xs rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 block py-1.5 px-2 font-medium"
                     >
                         <option value="ALL">All Strategies</option>
                         {strategyTags.map(tag => (
@@ -229,7 +229,7 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                             </option>
                         ))}
                     </select>
-                    <span className="bg-gray-100 text-gray-700 px-4 py-2 rounded-full text-sm font-bold shadow-sm">
+                    <span className="bg-gray-100 text-gray-700 px-2.5 py-1 rounded text-xs font-semibold">
                         {sortedEvents.length} Events
                     </span>
                 </div>
@@ -237,18 +237,18 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
 
             <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                    <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-4 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Time</th>
-                            <th className="px-4 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Action</th>
-                            <th className="px-4 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Strategy</th>
-                            <th className="px-4 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Symbol</th>
-                            <th className="px-4 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Strike</th>
-                            <th className="px-4 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Qty</th>
-                            <th className="px-4 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Price</th>
-                            <th className="px-4 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Reason</th>
-                            <th className="px-4 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">AI Analysis</th>
-                            <th className="px-4 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Realized P&L</th>
+                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Time</th>
+                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Action</th>
+                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Strategy</th>
+                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Symbol</th>
+                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Strike</th>
+                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Qty</th>
+                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Price</th>
+                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Reason</th>
+                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">AI Analysis</th>
+                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Realized P&L</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
@@ -265,16 +265,16 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                                     onClick={() => onRowClick && event.instrument_key && onRowClick(event)}
                                     title={event.instrument_key ? 'Click to view chart' : ''}
                                 >
-                                    <td className="px-4 py-4 whitespace-nowrap text-xs text-gray-500 font-medium">
+                                    <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-500 font-medium">
                                         {event.time}
                                     </td>
-                                    <td className="px-4 py-4 whitespace-nowrap">
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${isBuy ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
+                                    <td className="px-4 py-2.5 whitespace-nowrap">
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${isBuy ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
                                             }`}>
                                             {event.action}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-4 whitespace-nowrap">
+                                    <td className="px-4 py-2.5 whitespace-nowrap">
                                         {(() => {
                                             const tag = event.strategy_tag || '';
                                             let colorClass = 'bg-gray-100 text-gray-700 border-gray-200';
@@ -290,7 +290,7 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                                         })()}
                                     </td>
 
-                                    <td className="px-4 py-4 whitespace-nowrap">
+                                    <td className="px-4 py-2.5 whitespace-nowrap">
                                         <div className="flex items-center gap-1.5">
                                             <div className="font-bold text-gray-800">{event.symbol}</div>
                                             {event.instrument_key && (
@@ -303,16 +303,16 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                                             {event.type}
                                         </div>
                                     </td>
-                                    <td className="px-4 py-4 whitespace-nowrap font-semibold text-gray-700">
+                                    <td className="px-4 py-2.5 whitespace-nowrap font-semibold text-gray-700">
                                         {event.strike}
                                     </td>
-                                    <td className="px-4 py-4 whitespace-nowrap font-bold text-gray-800">
+                                    <td className="px-4 py-2.5 whitespace-nowrap font-bold text-gray-800">
                                         {event.qty}
                                     </td>
-                                    <td className="px-4 py-4 whitespace-nowrap font-medium text-gray-700">
+                                    <td className="px-4 py-2.5 whitespace-nowrap font-medium text-gray-700">
                                         ₹{event.price.toFixed(2)}
                                     </td>
-                                    <td className="px-4 py-4 whitespace-nowrap text-xs">
+                                    <td className="px-4 py-2.5 whitespace-nowrap text-xs">
                                         <span className={`px-2 py-1 rounded font-bold uppercase ${isBuy ? 'bg-gray-100 text-gray-600' :
                                             event.reason?.includes('Target') ? 'bg-emerald-100 text-emerald-700' :
                                                 event.reason?.includes('SL') ? 'bg-rose-100 text-rose-700' :
@@ -321,7 +321,7 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                                             {event.reason}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-4 text-xs text-gray-600 max-w-xs truncate" title={event.aiReasoning}>
+                                    <td className="px-4 py-2.5 text-xs text-gray-600 max-w-xs truncate" title={event.aiReasoning}>
                                         {event.aiReasoning && event.aiReasoning !== '-' ? (
                                             <span className="font-mono bg-yellow-50 text-yellow-800 px-2 py-1 rounded border border-yellow-100 text-[10px]">
                                                 {event.aiReasoning}
@@ -330,8 +330,8 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
                                             <span className="text-gray-300">-</span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-4 whitespace-nowrap font-bold">
-                                        {!isBuy && event.pnl !== undefined ? (
+                                    <td className="px-4 py-2.5 whitespace-nowrap font-bold">
+                                        {event.pnl !== undefined ? (
                                             <div className={`${pnlBg} ${pnlColor} px-2 py-1 rounded inline-block`}>
                                                 {event.pnl >= 0 ? '+' : ''}₹{event.pnl.toFixed(2)}
                                                 <span className="ml-1 text-[10px] opacity-70">

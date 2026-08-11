@@ -3,33 +3,33 @@ import React, { useState, useEffect, useRef } from 'react';
 const PositionsTable = ({ positions, liveTicks = {}, onRowClick }) => {
   if (!positions || positions.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-        <h2 className="text-2xl font-bold mb-4">Current Positions</h2>
-        <div className="text-center py-12">
-          <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-200">
+        <h2 className="text-sm font-semibold text-gray-800 mb-3">Current Positions</h2>
+        <div className="text-center py-10">
+          <svg className="mx-auto h-12 w-12 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
           </svg>
-          <p className="text-gray-500 font-medium">No open positions</p>
-          <p className="text-gray-400 text-sm mt-1">Positions will appear here when trades are active</p>
+          <p className="text-gray-500 text-sm font-medium">No open positions</p>
+          <p className="text-gray-400 text-xs mt-1">Positions will appear here when trades are active</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-xl p-6 border border-gray-100 transform transition-all hover:shadow-2xl">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+    <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-200">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-gray-800">
           Current Positions
         </h2>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {Object.keys(liveTicks).length > 0 && (
-            <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-bold border border-emerald-200">
+            <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-[10px] font-semibold border border-emerald-200">
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
               LIVE
             </span>
           )}
-          <span className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
+          <span className="bg-gray-100 text-gray-700 px-2.5 py-1 rounded text-xs font-semibold">
             {positions.length} Active
           </span>
         </div>
@@ -37,13 +37,13 @@ const PositionsTable = ({ positions, liveTicks = {}, onRowClick }) => {
 
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+          <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Instrument</th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Txn</th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Qty</th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Avg Price</th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Instrument</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Txn</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Qty</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Avg Price</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
                 <span className="flex items-center gap-1">
                   LTP
                   {Object.keys(liveTicks).length > 0 && (
@@ -51,7 +51,7 @@ const PositionsTable = ({ positions, liveTicks = {}, onRowClick }) => {
                   )}
                 </span>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">P&L</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">P&L</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -222,7 +222,7 @@ const GroupHeader = ({ pos, combinedPnl, slReferenceValue }) => {
               );
             })()}
             {isSpread && (
-              <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold border-2 bg-gradient-to-r from-teal-100 to-emerald-100 text-teal-800 border-teal-300">
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-teal-50 text-teal-700 border border-teal-200">
                 {pos.spread_type === 'SHORT_PUT_SPREAD' ? 'SHORT PUT SPREAD' : pos.spread_type === 'SHORT_CALL_SPREAD' ? 'SHORT CALL SPREAD' : pos.spread_type}
               </span>
             )}
