@@ -22,7 +22,7 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 # ============================================================================
 
 # Paper Trading Mode
-PAPER_TRADING = True  # Set to False for live trading
+PAPER_TRADING = False  # Set to False for live trading
 
 # Test Mode (bypass all time/day checks for testing)
 TEST_MODE = False  # Set to True to test outside market hours
@@ -120,8 +120,8 @@ MAX_CALL_POSITIONS = MAX_NIFTY_CALL_POSITIONS
 MAX_PUT_POSITIONS = MAX_NIFTY_PUT_POSITIONS
 
 # Number of lots per trade, per index (multiplied by index-specific lot size)
-NIFTY_LOT_MULTIPLIER = 5   # 5 lots x 65 = 325 qty
-SENSEX_LOT_MULTIPLIER = 8  # 8 lots x 20 = 160 qty
+NIFTY_LOT_MULTIPLIER = 1   # 1 lot x 65 = 65 qty
+SENSEX_LOT_MULTIPLIER = 1  # 1 lot x 20 = 20 qty
 INITIAL_VIRTUAL_FUND = 900000  # Initial trading account balance (1,00,000 per strategy x 9)
 
 # ============================================================================
