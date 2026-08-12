@@ -2,20 +2,10 @@ import React, { useState, useMemo } from 'react';
 
 const TradeHistoryTable = ({ trades, onRowClick }) => {
     const [strategyFilter, setStrategyFilter] = useState('ALL');
-    if (!trades || trades.length === 0) {
-        return (
-            <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-200">
-                <h2 className="text-sm font-semibold text-gray-800 mb-3">Trade History (Today)</h2>
-                <div className="text-center py-8">
-                    <p className="text-gray-500 text-sm">No trades recorded for today yet.</p>
-                </div>
-            </div>
-        );
-    }
 
     // Flatten trades into events
     const events = [];
-    trades.forEach(trade => {
+    (trades || []).forEach(trade => {
         if (trade.is_spread) {
             // Credit spread: real leg-by-leg execution sequence.
             // Entry: hedge (far) leg is BOUGHT first, near leg is SOLD second
@@ -209,6 +199,17 @@ const TradeHistoryTable = ({ trades, onRowClick }) => {
             return 0;
         });
     }, [events, strategyFilter]);
+
+    if (!trades || trades.length === 0) {
+        return (
+            <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-200">
+                <h2 className="text-sm font-semibold text-gray-800 mb-3">Trade History (Today)</h2>
+                <div className="text-center py-8">
+                    <p className="text-gray-500 text-sm">No trades recorded for today yet.</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-200">
