@@ -965,6 +965,16 @@ class AlgoTradingSystem:
             # 5. Check for token updates from .env every 5 minutes
             schedule.every(5).minutes.do(self.check_token_updates)
 
+            # 5b. WebSocket watchdog - the feed has no self-healing reconnect
+            # (see DhanWebSocketClient.reconnect_if_needed docstring), so without
+            # this a single drop (or a rate-limited first connect at startup)
+            # silently kills live ticks - and every chart/SL check that depends
+            # on them - for the rest of the day. The 120s gate inside
+            # reconnect_if_needed itself (not this interval) is what prevents
+            # stacking into Dhan's connect rate limit.
+            if data_manager.ws_enabled:
+                schedule.every(60).seconds.do(self.check_websocket_connection)
+
             # 6. Proactively regenerate the Dhan access token daily before
             # market open (~24h validity) - on an unattended server nobody's
             # around to notice it expired, so refresh it before that happens
@@ -1088,6 +1098,21 @@ class AlgoTradingSystem:
                 logger.info("✅ Clients refreshed with new token")
         except Exception as e:
             logger.error(f"Error checking token updates: {e}")
+
+    def check_websocket_connection(self):
+        """
+        Watchdog: reconnect the Dhan live-tick WebSocket if it dropped.
+        DhanWebSocketClient never retries on its own (see its
+        reconnect_if_needed docstring) - without this, one drop or a
+        rate-limited startup attempt kills live ticks for the rest of the
+        day. reconnect_if_needed() internally rate-limits actual connect
+        attempts, so calling this every 60s is safe.
+        """
+        try:
+            if data_manager.ws_client and not data_manager.ws_client.is_connected():
+                data_manager.ws_client.reconnect_if_needed()
+        except Exception as e:
+            logger.error(f"Error in WebSocket watchdog: {e}")
 
     def refresh_dhan_token(self):
         """

@@ -621,6 +621,7 @@ class DhanWebSocketClient:
         self.connected = False
         self.feed = None
         self.thread = None
+        self.last_connect_attempt = 0.0
 
         # instrument_key ("{segment}|{security_id}") -> latest tick dict
         self.tick_buffers: Dict[str, Dict] = {}
@@ -645,6 +646,7 @@ class DhanWebSocketClient:
 
     def connect(self) -> bool:
         """Connect to Dhan's Live Market Feed (starts a background thread)"""
+        self.last_connect_attempt = time.time()
         try:
             dhan_context = DhanContext(self.client_id, self.access_token)
 
@@ -799,6 +801,30 @@ class DhanWebSocketClient:
 
     def is_connected(self) -> bool:
         return self.connected
+
+    def reconnect_if_needed(self, min_interval_secs: int = 120) -> bool:
+        """
+        Watchdog hook (call periodically from the scheduler, e.g. every 60s) -
+        _on_close/_on_error only flip self.connected to False, they never retry
+        the connection themselves, so without an external caller nudging this
+        the feed stays dead for the rest of the process's life after any drop
+        (confirmed live 2026-08-12: a single startup-time HTTP 429 from Dhan's
+        rate limiter left it disconnected for 1.5+ hours with no further
+        attempts). Gated to min_interval_secs apart so a fast-polling caller
+        can't stack attempts faster than Dhan's own connect rate limit - doing
+        that resets/extends the 429 cooldown instead of clearing it.
+        """
+        if self.connected:
+            return True
+        if time.time() - self.last_connect_attempt < min_interval_secs:
+            return False
+
+        logger.warning("🔄 Dhan WebSocket reconnect attempt (feed was down)...")
+        if self.connect():
+            if self.subscribed_instruments:
+                self.subscribe(list(self.subscribed_instruments), force=True)
+            return True
+        return False
 
     def get_latest_tick(self, instrument_key: str) -> Optional[Dict]:
         """Get the latest tick for an instrument"""

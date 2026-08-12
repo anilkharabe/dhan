@@ -32,6 +32,16 @@ STATE_FILE = os.path.join(config.BASE_DIR, "supertrend_state.json")
 
 SYMBOLS = ["NIFTY", "SENSEX"]
 
+# Offset added to the local trade counter to build the Mongo trade_id. Keeps this
+# strategy's ids in their own namespace, well above anything CREDIT_A's
+# trade_tracker.trade_counter (small per-day counts, synced via get_max_trade_id())
+# will ever reach, so a BUY/SELL pairing here can never collide with CREDIT_A's.
+# Must be a stable int, not hash() - hash() on strings is randomized per Python
+# process (no PYTHONHASHSEED set), so a value computed before a backend restart
+# would never match the same computation after it, permanently orphaning the
+# BUY side of get_open_positions()'s open/closed matching.
+MONGO_TRADE_ID_OFFSET = 900_000_000
+
 
 class SupertrendStrategy:
     """Own, isolated state/lifecycle for the Supertrend paper-trading test."""
@@ -61,6 +71,17 @@ class SupertrendStrategy:
 
             self.positions = saved.get('positions', {s: None for s in SYMBOLS})
             self._next_trade_id = saved.get('next_trade_id', 1)
+
+            # Backfill mongo_trade_id on positions saved by pre-fix code (which had
+            # no such field) so later exit/trailing-SL calls don't KeyError. This
+            # trade's own entry row in Mongo was logged under the old hash()-based
+            # id, so its exit still won't pair with it there - one last orphaned
+            # row is expected for whatever was open at deploy time, not a regression.
+            for symbol, position in self.positions.items():
+                if position is not None and 'mongo_trade_id' not in position:
+                    position['mongo_trade_id'] = MONGO_TRADE_ID_OFFSET + self._next_trade_id
+                    self._next_trade_id += 1
+
             logger.info(f"[Supertrend] Restored state: positions={self.positions}")
 
         except Exception as e:
@@ -216,11 +237,12 @@ class SupertrendStrategy:
             profit_target_value = net_credit * (1 - config.SUPERTREND_PROFIT_TARGET_PERCENT / 100.0)
             lot_size = self._lot_size(symbol)
             trade_id = f"SUPERTREND_{self._next_trade_id}"
+            mongo_trade_id = MONGO_TRADE_ID_OFFSET + self._next_trade_id
             self._next_trade_id += 1
             entry_time = datetime.now()
 
             position = {
-                'trade_id': trade_id, 'symbol': symbol, 'direction': direction,
+                'trade_id': trade_id, 'mongo_trade_id': mongo_trade_id, 'symbol': symbol, 'direction': direction,
                 'entry_supertrend': supertrend_value,
                 'near_option_type': near_type, 'near_strike': near_strike,
                 'near_instrument_key': near_instrument_key, 'near_entry_price': near_price,
@@ -235,7 +257,7 @@ class SupertrendStrategy:
             self._persist_state()
 
             mongo_logger.log_trade(
-                timestamp=entry_time, trade_id=hash(trade_id) & 0x7FFFFFFF, option_type=near_type, strike=near_strike,
+                timestamp=entry_time, trade_id=mongo_trade_id, option_type=near_type, strike=near_strike,
                 action="BUY", price=near_price, quantity=lot_size, stop_loss=stop_loss_value,
                 symbol=symbol, instrument_key=near_instrument_key, expiry_date=expiry_date, lot_size=lot_size,
                 reason=f"Supertrend {direction} @ {supertrend_value:.1f}", strategy_tag=config.SUPERTREND_CS_TAG,
@@ -327,7 +349,7 @@ class SupertrendStrategy:
                 position['stop_loss_value'] = new_trailing_sl
                 position['trailing_active'] = True
                 self._persist_state()
-                mongo_logger.update_trade_state(hash(position['trade_id']) & 0x7FFFFFFF, {
+                mongo_logger.update_trade_state(position['mongo_trade_id'], {
                     'stop_loss_value': new_trailing_sl,
                     'trailing_active': True,
                 })
@@ -362,7 +384,7 @@ class SupertrendStrategy:
             exit_time = datetime.now()
 
             mongo_logger.log_trade(
-                timestamp=exit_time, trade_id=hash(position['trade_id']) & 0x7FFFFFFF, option_type=position['near_option_type'],
+                timestamp=exit_time, trade_id=position['mongo_trade_id'], option_type=position['near_option_type'],
                 strike=position['near_strike'], action="SELL", price=near_exit_price, quantity=position['lot_size'],
                 reason=exit_reason, pnl=pnl, symbol=symbol, instrument_key=position['near_instrument_key'],
                 expiry_date=position.get('expiry_date', ''), lot_size=position['lot_size'], strategy_tag=config.SUPERTREND_CS_TAG,
