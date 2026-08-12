@@ -232,12 +232,14 @@ const GroupHeader = ({ pos, combinedPnl, slReferenceValue }) => {
               </span>
             )}
             {isSpread && stopLoss > 0 && (
-              <span className="text-xs text-gray-500 font-medium">
-                SL: <span className={`font-bold ${isSLHit ? 'text-red-600' : isNearSL ? 'text-amber-600' : 'text-gray-700'}`}>₹{stopLoss.toFixed(2)}</span>
-                {isSLHit && <span className="ml-1 px-1.5 py-0.5 bg-red-100 text-red-700 text-[9px] font-bold rounded animate-pulse">HIT</span>}
-                {isNearSL && !isSLHit && <span className="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-bold rounded">NEAR</span>}
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border ${
+                isSLHit ? 'bg-red-50 border-red-300 text-red-700' : isNearSL ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-gray-300 text-gray-700'
+              }`}>
+                SL ₹{stopLoss.toFixed(2)}
+                {isSLHit && <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[9px] font-bold rounded animate-pulse">HIT</span>}
+                {isNearSL && !isSLHit && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-bold rounded">NEAR</span>}
                 {pos.trailing_active && (
-                  <span className="ml-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold rounded border border-blue-300 inline-flex items-center gap-0.5">
+                  <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold rounded border border-blue-300 inline-flex items-center gap-0.5">
                     <svg className="w-2 h-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
