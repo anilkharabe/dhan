@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const VIEW_MODES = [
@@ -31,9 +31,17 @@ const OIPcrChart = ({ oiPcrData }) => {
     }));
   };
 
-  const niftyData = oiPcrData.nifty?.history ? formatHistoryData(oiPcrData.nifty.history) : [];
-  const sensexData = oiPcrData.sensex?.history ? formatHistoryData(oiPcrData.sensex.history) : [];
-  const bankniftyData = oiPcrData.banknifty?.history ? formatHistoryData(oiPcrData.banknifty.history) : [];
+  // Memoized on the underlying history arrays (not just recomputed every
+  // render) - Dashboard re-renders on every live SSE tick, and Recharts
+  // restarts its line-draw animation whenever it sees a new `data` array
+  // reference, even with identical values. Without this, the animation
+  // never finishes during market hours and the lines never appear.
+  const niftyHistory = oiPcrData.nifty?.history;
+  const sensexHistory = oiPcrData.sensex?.history;
+  const bankniftyHistory = oiPcrData.banknifty?.history;
+  const niftyData = useMemo(() => (niftyHistory ? formatHistoryData(niftyHistory) : []), [niftyHistory]);
+  const sensexData = useMemo(() => (sensexHistory ? formatHistoryData(sensexHistory) : []), [sensexHistory]);
+  const bankniftyData = useMemo(() => (bankniftyHistory ? formatHistoryData(bankniftyHistory) : []), [bankniftyHistory]);
 
   // Which primary index to pair with BANKNIFTY today, mirroring config.py's
   // NIFTY_TRADING_DAYS=[0,1,4]/SENSEX_TRADING_DAYS=[2,3] (0=Mon..4=Fri there;
@@ -118,10 +126,10 @@ const OIPcrChart = ({ oiPcrData }) => {
             wrapperStyle={{ fontSize: 11 }}
           />
           {viewMode !== 'atm5' && (
-            <Line type="monotone" dataKey="full" stroke={colorFull} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} connectNulls={false} />
+            <Line type="monotone" dataKey="full" stroke={colorFull} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} connectNulls={false} isAnimationActive={false} />
           )}
           {viewMode !== 'full' && (
-            <Line type="monotone" dataKey="atm5" stroke={colorAtm5} strokeWidth={1.5} strokeDasharray="4 3" dot={false} activeDot={{ r: 4 }} />
+            <Line type="monotone" dataKey="atm5" stroke={colorAtm5} strokeWidth={1.5} strokeDasharray="4 3" dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
           )}
         </LineChart>
       </ResponsiveContainer>
@@ -225,4 +233,4 @@ const OIPcrChart = ({ oiPcrData }) => {
   );
 };
 
-export default OIPcrChart;
+export default React.memo(OIPcrChart);
