@@ -120,13 +120,20 @@ class DataManager:
         except Exception as e:
             pass
 
-    def get_latest_price_from_websocket(self, instrument_key: str) -> Optional[float]:
+    def get_latest_price_from_websocket(self, instrument_key: str, max_age_secs: float = 10.0) -> Optional[float]:
         """
         Get latest price from WebSocket tick buffer
         Much faster than REST API for stop-loss checks
 
         Args:
             instrument_key: Instrument identifier
+            max_age_secs: reject ticks older than this and return None instead,
+                so callers (all of which do `get_latest_price_from_websocket(...) or
+                dhan_client.get_current_price(...)`) fall back to a fresh REST quote.
+                tick_buffers is never cleared on disconnect, so without this check a
+                dead feed silently serves the last price it ever received - forever -
+                which froze CREDIT_A's trailing stop-loss on 2026-08-12 while the
+                WebSocket was down (see DhanWebSocketClient.reconnect_if_needed).
 
         Returns:
             Latest traded price or None
@@ -135,10 +142,14 @@ class DataManager:
             return None
 
         latest_tick = self.ws_client.get_latest_tick(instrument_key)
-        if latest_tick:
-            return latest_tick.get('ltp')
+        if not latest_tick:
+            return None
 
-        return None
+        tick_time = latest_tick.get('timestamp')
+        if tick_time and (datetime.now() - tick_time).total_seconds() > max_age_secs:
+            return None
+
+        return latest_tick.get('ltp')
     
     def get_previous_trading_day(self, current_date: datetime) -> datetime:
         """
