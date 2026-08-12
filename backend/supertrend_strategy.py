@@ -221,8 +221,8 @@ class SupertrendStrategy:
                 logger.warning(f"[Supertrend] Could not resolve instrument keys for {symbol} {near_strike}/{far_strike} {near_type}")
                 return
 
-            near_price = data_manager.get_latest_price_from_websocket(near_instrument_key) or dhan_client.get_current_price(near_instrument_key)
-            far_price = data_manager.get_latest_price_from_websocket(far_instrument_key) or dhan_client.get_current_price(far_instrument_key)
+            near_price = data_manager.get_live_price(near_instrument_key)
+            far_price = data_manager.get_live_price(far_instrument_key)
             if near_price is None or far_price is None:
                 logger.warning(f"[Supertrend] Could not fetch leg prices for {symbol} {near_strike}/{far_strike}")
                 return
@@ -330,7 +330,7 @@ class SupertrendStrategy:
         if position is None:
             return
         try:
-            near_price = data_manager.get_latest_price_from_websocket(position['near_instrument_key']) or dhan_client.get_current_price(position['near_instrument_key'])
+            near_price = data_manager.get_live_price(position['near_instrument_key'])
             if near_price is None:
                 return
 
@@ -358,7 +358,7 @@ class SupertrendStrategy:
                 self.simulate_exit(symbol, "Trailing Stop Loss")
                 return
 
-            far_price = data_manager.get_latest_price_from_websocket(position['far_instrument_key']) or dhan_client.get_current_price(position['far_instrument_key'])
+            far_price = data_manager.get_live_price(position['far_instrument_key'])
             if far_price is not None:
                 cost_to_close = near_price - far_price
                 if cost_to_close <= position['profit_target_value']:

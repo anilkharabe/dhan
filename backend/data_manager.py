@@ -14,17 +14,28 @@ import logger
 from dhan_api import dhan_client
 from indicators import Indicators
 from mongo_logger import mongo_logger
+from telegram_notifier import telegram_notifier
+
+# How long the live-price fallback can run on REST alone before alerting -
+# see get_live_price(). Kept short since this covers real-money SL/target
+# checks, not just informational data.
+WS_OUTAGE_ALERT_SECS = 60
 
 class DataManager:
     """Manage option data and candles"""
-    
+
     def __init__(self):
         self.data_cache = {}  # Cache for storing candle data
         self.last_update = {}  # Track last update time
-        
+
         # WebSocket support (LTP/OI ticks only - candles always come via REST)
         self.ws_client = None
         self.ws_enabled = config.USE_WEBSOCKET if hasattr(config, 'USE_WEBSOCKET') else False
+
+        # REST-fallback throttle + outage-alert state for get_live_price()
+        self._rest_fallback_cache: Dict[str, Dict] = {}  # instrument_key -> {'price', 'time'}
+        self._ws_fallback_since: Optional[datetime] = None
+        self._ws_outage_alerted = False
     
     def init_websocket_feed(self):
         """
@@ -128,11 +139,11 @@ class DataManager:
         Args:
             instrument_key: Instrument identifier
             max_age_secs: reject ticks older than this and return None instead,
-                so callers (all of which do `get_latest_price_from_websocket(...) or
-                dhan_client.get_current_price(...)`) fall back to a fresh REST quote.
-                tick_buffers is never cleared on disconnect, so without this check a
-                dead feed silently serves the last price it ever received - forever -
-                which froze CREDIT_A's trailing stop-loss on 2026-08-12 while the
+                so callers fall back to a fresh REST quote (directly, or via
+                get_live_price() below). tick_buffers is never cleared on
+                disconnect, so without this check a dead feed silently serves
+                the last price it ever received - forever - which froze
+                CREDIT_A's trailing stop-loss on 2026-08-12 while the
                 WebSocket was down (see DhanWebSocketClient.reconnect_if_needed).
 
         Returns:
@@ -150,7 +161,76 @@ class DataManager:
             return None
 
         return latest_tick.get('ltp')
-    
+
+    def get_live_price(self, instrument_key: str, rest_min_interval_secs: float = 3.0) -> Optional[float]:
+        """
+        Preferred price accessor for live-trading checks (SL/profit-target/
+        trailing-SL). WS tick if fresh, else a REST quote - but the REST leg
+        is throttled to at most one live Dhan call per instrument every
+        `rest_min_interval_secs` (the cached price is reused in between).
+
+        Without this throttle, a WS outage turns every 2s SL-check cycle into
+        ~4 REST calls/2s per position (near+far leg, SL+target checks) -
+        hammering Dhan's rate-limited LTP endpoint right when reconnects are
+        already contending for it. Also tracks how long checks have been
+        running on the REST fallback and sends one Telegram alert if a WS
+        outage crosses WS_OUTAGE_ALERT_SECS, plus a recovery message once
+        fresh WS ticks resume - so an outage is visible instead of only
+        discoverable after the fact in logs.
+
+        Returns:
+            Latest price (WS or throttled REST) or None
+        """
+        ws_price = self.get_latest_price_from_websocket(instrument_key)
+        if ws_price is not None:
+            self._note_ws_recovered()
+            return ws_price
+
+        self._note_ws_down()
+
+        now = datetime.now()
+        cached = self._rest_fallback_cache.get(instrument_key)
+        if cached and (now - cached['time']).total_seconds() < rest_min_interval_secs:
+            return cached['price']
+
+        price = dhan_client.get_current_price(instrument_key)
+        if price is not None:
+            self._rest_fallback_cache[instrument_key] = {'price': price, 'time': now}
+        return price
+
+    def _note_ws_down(self):
+        """Track how long get_live_price() has been relying on REST, and alert once past the threshold."""
+        now = datetime.now()
+        if self._ws_fallback_since is None:
+            self._ws_fallback_since = now
+            return
+
+        outage_secs = (now - self._ws_fallback_since).total_seconds()
+        if not self._ws_outage_alerted and outage_secs >= WS_OUTAGE_ALERT_SECS:
+            self._ws_outage_alerted = True
+            logger.warning(f"⚠️ WebSocket feed down for {outage_secs:.0f}s - SL/target checks running on REST fallback")
+            telegram_notifier.send_error(
+                "WebSocket Feed Down",
+                f"Live tick feed unavailable for over {int(outage_secs)}s. "
+                f"SL/profit-target/trailing checks are running on a rate-limited "
+                f"REST fallback until the feed reconnects."
+            )
+
+    def _note_ws_recovered(self):
+        """Clear fallback-outage tracking once a fresh WS tick arrives; alert if the outage had been flagged."""
+        if self._ws_fallback_since is None:
+            return
+
+        if self._ws_outage_alerted:
+            downtime = (datetime.now() - self._ws_fallback_since).total_seconds()
+            logger.info(f"✅ WebSocket feed recovered after {downtime:.0f}s outage")
+            telegram_notifier.send_custom_message("✅ WebSocket Feed Recovered", {
+                "Downtime": f"{downtime:.0f}s",
+            })
+
+        self._ws_fallback_since = None
+        self._ws_outage_alerted = False
+
     def get_previous_trading_day(self, current_date: datetime) -> datetime:
         """
         Get the previous trading day (skipping weekends)

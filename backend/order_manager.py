@@ -189,8 +189,8 @@ class OrderManager:
                 logger.error(f"Could not resolve instrument keys for {spread_type} {symbol} {near_strike}/{far_strike}")
                 return None
 
-            near_price = data_manager.get_latest_price_from_websocket(near_instrument_key) or dhan_client.get_current_price(near_instrument_key)
-            far_price = data_manager.get_latest_price_from_websocket(far_instrument_key) or dhan_client.get_current_price(far_instrument_key)
+            near_price = data_manager.get_live_price(near_instrument_key)
+            far_price = data_manager.get_live_price(far_instrument_key)
 
             if near_price is None or far_price is None:
                 logger.error(f"Could not fetch leg prices for {spread_type} {symbol} {near_strike}/{far_strike}")
@@ -442,7 +442,7 @@ class OrderManager:
         SL is based on the sold (near) leg's own price, not the net spread cost -
         see place_credit_spread()'s stop_loss_value calc."""
         try:
-            near_price = data_manager.get_latest_price_from_websocket(position['near_instrument_key']) or dhan_client.get_current_price(position['near_instrument_key'])
+            near_price = data_manager.get_live_price(position['near_instrument_key'])
 
             if near_price is None:
                 return False
@@ -466,8 +466,8 @@ class OrderManager:
     def check_credit_spread_profit_target(self, position: Dict) -> bool:
         """Check and act on profit target for a single credit-spread position"""
         try:
-            near_price = data_manager.get_latest_price_from_websocket(position['near_instrument_key']) or dhan_client.get_current_price(position['near_instrument_key'])
-            far_price = data_manager.get_latest_price_from_websocket(position['far_instrument_key']) or dhan_client.get_current_price(position['far_instrument_key'])
+            near_price = data_manager.get_live_price(position['near_instrument_key'])
+            far_price = data_manager.get_live_price(position['far_instrument_key'])
 
             if near_price is None or far_price is None:
                 return False
