@@ -1,0 +1,135 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {}
+
+# Serialize deploys so two pushes in quick succession can't both restart
+# algo-backend at once - Dhan rate-limits token/websocket reconnects to
+# roughly once per 2 minutes, and stacked restarts break the session
+# (see aws_deployment memory, incident 2026-08-12).
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  INSTANCE_ID: i-04c94b940b6921cf4
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine what changed
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual run - deploying frontend and backend unconditionally."
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "requirements=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            CHANGED=$(git show --name-only --pretty="" HEAD)
+          else
+            CHANGED=$(git diff --name-only "$BEFORE" HEAD)
+          fi
+          echo "Changed files in this push:"
+          echo "$CHANGED"
+          echo "frontend=$(echo "$CHANGED" | grep -qE '^frontend/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "backend=$(echo "$CHANGED" | grep -qE '^(backend/|api/|deploy/|run_backend\.py|run_api\.py|wsgi\.py|ecosystem\.config\.js|requirements.*\.txt)' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "requirements=$(echo "$CHANGED" | grep -qE '^requirements.*\.txt' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      # Build on the GitHub runner, never on the production box - the
+      # server is a 1GB-RAM t3.micro with no swap and `npm run build`
+      # (rollup/esbuild) reliably OOMs it, hanging the whole instance
+      # (see aws_deployment memory, incident 2026-08-12).
+      - name: Set up Node
+        if: steps.changes.outputs.frontend == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        if: steps.changes.outputs.frontend == 'true'
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Configure AWS credentials
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.backend == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.CI_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.CI_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install deploy SSH key
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.backend == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key.pem
+          chmod 600 ~/.ssh/deploy_key.pem
+          cat >> ~/.ssh/config <<EOF
+          Host algo-server
+            HostName ${{ env.INSTANCE_ID }}
+            User ubuntu
+            IdentityFile ~/.ssh/deploy_key.pem
+            StrictHostKeyChecking no
+            ProxyCommand aws ec2-instance-connect open-tunnel --instance-id ${{ env.INSTANCE_ID }}
+          EOF
+
+      - name: Pull backend code on server
+        if: steps.changes.outputs.backend == 'true'
+        run: |
+          ssh algo-server "cd ~/algo && git fetch origin master && git reset --hard origin/master"
+
+      - name: Install backend dependencies
+        if: steps.changes.outputs.requirements == 'true'
+        run: |
+          ssh algo-server "cd ~/algo && .venv/bin/pip install -r requirements.txt -r requirements-prod.txt"
+
+      - name: Deploy frontend build
+        if: steps.changes.outputs.frontend == 'true'
+        run: |
+          ssh algo-server "rm -rf ~/algo/frontend/dist/* ~/algo/frontend/dist/.[!.]* 2>/dev/null; mkdir -p ~/algo/frontend/dist"
+          scp -o "ProxyCommand=aws ec2-instance-connect open-tunnel --instance-id ${{ env.INSTANCE_ID }}" \
+            -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no \
+            -r frontend/dist/* ubuntu@${{ env.INSTANCE_ID }}:~/algo/frontend/dist/
+
+      # Only restart the trading engine/API when backend code actually
+      # changed - a frontend-only deploy needs no restart (nginx just
+      # serves the new dist/), and every restart forces algo-backend to
+      # regenerate its Dhan session, which is rate-limited.
+      - name: Restart backend services
+        if: steps.changes.outputs.backend == 'true'
+        run: |
+          ssh algo-server "cd ~/algo && pm2 restart ecosystem.config.js --only algo-backend,algo-api && pm2 save"
+
+      - name: Health check
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.backend == 'true'
+        run: |
+          for i in 1 2 3 4 5; do
+            if ssh algo-server "curl -sf http://127.0.0.1:5000/api/health"; then
+              echo ""
+              echo "Backend OK"
+              break
+            fi
+            if [ "$i" = 5 ]; then
+              echo "::error::Backend health check failed after 5 attempts"
+              exit 1
+            fi
+            sleep 5
+          done
+          curl -sf -o /dev/null http://65.2.228.173/ && echo "Frontend OK" || (echo "::error::Frontend health check failed" && exit 1)
