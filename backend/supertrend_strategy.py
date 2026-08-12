@@ -227,7 +227,7 @@ class SupertrendStrategy:
                 'far_option_type': far_type, 'far_strike': far_strike,
                 'far_instrument_key': far_instrument_key, 'far_entry_price': far_price,
                 'net_credit': net_credit, 'stop_loss_value': stop_loss_value,
-                'trailing_sl': stop_loss_value,
+                'trailing_sl': stop_loss_value, 'trailing_active': False,
                 'profit_target_value': profit_target_value, 'sl_percent': sl_percent,
                 'lot_size': lot_size, 'entry_time': entry_time.isoformat(), 'expiry_date': expiry_date,
             }
@@ -319,7 +319,18 @@ class SupertrendStrategy:
             new_trailing_sl = min(position['trailing_sl'], floor_candidate)
             if new_trailing_sl != position['trailing_sl']:
                 position['trailing_sl'] = new_trailing_sl
+                # Mirror onto stop_loss_value/trailing_active too - those are the
+                # fields Mongo and the dashboard actually read (see
+                # /api/current-positions), so without this the UI stays frozen at
+                # the entry-time SL forever even though trailing_sl above is
+                # correctly tightening and driving the real exit check below.
+                position['stop_loss_value'] = new_trailing_sl
+                position['trailing_active'] = True
                 self._persist_state()
+                mongo_logger.update_trade_state(hash(position['trade_id']) & 0x7FFFFFFF, {
+                    'stop_loss_value': new_trailing_sl,
+                    'trailing_active': True,
+                })
 
             if near_price >= position['trailing_sl']:
                 self.simulate_exit(symbol, "Trailing Stop Loss")

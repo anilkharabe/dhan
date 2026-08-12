@@ -74,7 +74,11 @@ class OrderManager:
                         'trade_id': trade.get('trade_id', f"RESTORED_{int(time.time())}"),
                         'symbol': symbol, 'signal_type': signal_type,
                         'spread_type': trade.get('spread_type', ''),
-                        'near_option_type': trade.get('type'), 'near_strike': trade.get('strike', 0),
+                        # 'type' is trade_tracker's own in-memory field name; 'option_type' is what
+                        # Mongo docs use (see mongo_logger.log_trade) - trade_tracker.sync_from_db()
+                        # replaces self.trades with Mongo-shaped docs before this runs, so both must
+                        # be checked or a post-restart restore silently loses the near leg's type.
+                        'near_option_type': trade.get('type') or trade.get('option_type'), 'near_strike': trade.get('strike', 0),
                         'near_instrument_key': trade.get('instrument_key', ''),
                         'near_entry_price': float(trade.get('entry_price', 0)),
                         'far_option_type': trade.get('far_option_type', ''), 'far_strike': trade.get('far_strike', 0),
