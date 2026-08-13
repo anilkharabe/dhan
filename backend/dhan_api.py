@@ -802,7 +802,22 @@ class DhanWebSocketClient:
     def is_connected(self) -> bool:
         return self.connected
 
-    def reconnect_if_needed(self, min_interval_secs: int = 120) -> bool:
+    def seconds_since_last_tick(self) -> Optional[float]:
+        """
+        Seconds since the most recent tick of any kind was received, or None
+        if no tick has arrived yet this session. Used by the watchdog to spot
+        a feed that's silently stalled - confirmed live 2026-08-13: MarketFeed
+        went quiet for 68s-1099s at a time, eight separate times in one
+        session, without ever calling on_close/on_error or flipping
+        self.connected to False. is_connected() alone can't see that.
+        """
+        with self.lock:
+            if not self.tick_buffers:
+                return None
+            latest = max(t['timestamp'] for t in self.tick_buffers.values())
+        return (datetime.now() - latest).total_seconds()
+
+    def reconnect_if_needed(self, min_interval_secs: int = 120, force: bool = False) -> bool:
         """
         Watchdog hook (call periodically from the scheduler, e.g. every 60s) -
         _on_close/_on_error only flip self.connected to False, they never retry
@@ -813,13 +828,27 @@ class DhanWebSocketClient:
         attempts). Gated to min_interval_secs apart so a fast-polling caller
         can't stack attempts faster than Dhan's own connect rate limit - doing
         that resets/extends the 429 cooldown instead of clearing it.
+
+        force=True bypasses the "already connected" short-circuit, for the
+        silent-stall case caught by seconds_since_last_tick() - self.connected
+        is still True there, so the normal path would no-op forever. Still
+        goes through the same min_interval_secs gate as any other attempt.
         """
-        if self.connected:
+        if self.connected and not force:
             return True
         if time.time() - self.last_connect_attempt < min_interval_secs:
             return False
 
-        logger.warning("🔄 Dhan WebSocket reconnect attempt (feed was down)...")
+        logger.warning(
+            "🔄 Dhan WebSocket reconnect attempt (feed was down)..."
+            if not force else
+            "🔄 Dhan WebSocket reconnect attempt (feed stalled - no ticks despite connected flag)..."
+        )
+        if force:
+            # Tear down the stale feed/thread cleanly before starting a new
+            # one - connect() alone would leave the old MarketFeed thread
+            # dangling instead of replacing it.
+            self.disconnect()
         if self.connect():
             if self.subscribed_instruments:
                 self.subscribe(list(self.subscribed_instruments), force=True)

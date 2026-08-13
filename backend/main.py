@@ -10,7 +10,7 @@ import sys
 
 import config
 import logger
-from data_manager import data_manager
+from data_manager import data_manager, WS_OUTAGE_ALERT_SECS
 from strategy import strategy
 from order_manager import order_manager
 from trade_tracker import trade_tracker
@@ -18,6 +18,15 @@ from telegram_notifier import telegram_notifier
 from charts import chart_generator
 from mongo_logger import mongo_logger
 from supertrend_strategy import supertrend_strategy
+
+# How long the WS client can sit flagged "connected" with no ticks for any
+# subscribed instrument before check_websocket_connection() force-reconnects
+# it - see that method's docstring. Kept above WS_OUTAGE_ALERT_SECS so the
+# Telegram alert fires first as an early warning, then this kicks in shortly
+# after if the feed still hasn't recovered on its own.
+WS_STALE_RECONNECT_SECS = 90
+assert WS_STALE_RECONNECT_SECS > WS_OUTAGE_ALERT_SECS, \
+    "stale-reconnect threshold must stay above the outage-alert threshold"
 
 class AlgoTradingSystem:
     """Main trading system orchestrator - supports multi-index trading"""
@@ -1101,16 +1110,41 @@ class AlgoTradingSystem:
 
     def check_websocket_connection(self):
         """
-        Watchdog: reconnect the Dhan live-tick WebSocket if it dropped.
-        DhanWebSocketClient never retries on its own (see its
-        reconnect_if_needed docstring) - without this, one drop or a
+        Watchdog: reconnect the Dhan live-tick WebSocket if it dropped, OR if
+        it's silently stalled. DhanWebSocketClient never retries on its own
+        (see its reconnect_if_needed docstring) - without this, one drop or a
         rate-limited startup attempt kills live ticks for the rest of the
         day. reconnect_if_needed() internally rate-limits actual connect
         attempts, so calling this every 60s is safe.
+
+        The stall case is separate from the drop case: confirmed live
+        2026-08-13, MarketFeed went quiet for 68s-1099s at a time (eight
+        times in one session) without ever flipping self.connected to False,
+        so the is_connected()-gated branch alone never caught it and the
+        system just passively waited on Dhan to resume ticking - up to 18
+        minutes on the worst occurrence, all while positions were open and
+        depending on this feed for SL/target checks. WS_STALE_RECONNECT_SECS
+        is set above WS_OUTAGE_ALERT_SECS (data_manager.py) so the Telegram
+        alert fires first as a heads-up, then this forces a reconnect shortly
+        after if the feed still hasn't recovered on its own.
         """
         try:
-            if data_manager.ws_client and not data_manager.ws_client.is_connected():
-                data_manager.ws_client.reconnect_if_needed()
+            client = data_manager.ws_client
+            if not client:
+                return
+
+            if not client.is_connected():
+                client.reconnect_if_needed()
+                return
+
+            if client.subscribed_instruments:
+                stale_secs = client.seconds_since_last_tick()
+                if stale_secs is not None and stale_secs > WS_STALE_RECONNECT_SECS:
+                    logger.warning(
+                        f"⚠️ Dhan WebSocket flagged connected but no ticks for "
+                        f"{stale_secs:.0f}s - forcing reconnect"
+                    )
+                    client.reconnect_if_needed(force=True)
         except Exception as e:
             logger.error(f"Error in WebSocket watchdog: {e}")
 
