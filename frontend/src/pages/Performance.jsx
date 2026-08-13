@@ -7,7 +7,7 @@ import apiService from '../api';
 import DailySummary from '../components/DailySummary';
 import TradeHistoryTable from '../components/TradeHistoryTable';
 
-const INITIAL_CAPITAL = 100000;
+const INITIAL_CAPITAL = 500000;
 
 // Generic per-tag color assignment (strategy tags are config-driven, e.g. CREDIT_A/CREDIT_B)
 const STRATEGY_PALETTE = [
