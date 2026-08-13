@@ -22,7 +22,7 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 # ============================================================================
 
 # Paper Trading Mode
-PAPER_TRADING = False  # Set to False for live trading
+PAPER_TRADING = True  # Set to False for live trading
 
 # Test Mode (bypass all time/day checks for testing)
 TEST_MODE = False  # Set to True to test outside market hours
