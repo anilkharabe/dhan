@@ -120,8 +120,8 @@ MAX_CALL_POSITIONS = MAX_NIFTY_CALL_POSITIONS
 MAX_PUT_POSITIONS = MAX_NIFTY_PUT_POSITIONS
 
 # Number of lots per trade, per index (multiplied by index-specific lot size)
-NIFTY_LOT_MULTIPLIER = 1   # 1 lot x 65 = 65 qty
-SENSEX_LOT_MULTIPLIER = 1  # 1 lot x 20 = 20 qty
+NIFTY_LOT_MULTIPLIER = 5   # 5 lots x 65 = 325 qty
+SENSEX_LOT_MULTIPLIER = 5  # 5 lots x 20 = 100 qty
 INITIAL_VIRTUAL_FUND = 900000  # Initial trading account balance (1,00,000 per strategy x 9)
 
 # ============================================================================
