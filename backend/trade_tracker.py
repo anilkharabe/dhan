@@ -261,19 +261,44 @@ class TradeTracker:
         except Exception as e:
             logger.error(f"Error saving to CSV: {str(e)}")
 
+    def _roll_to_today_if_needed(self):
+        """Detect a new trading day and clear in-memory transaction history.
+
+        algo-backend gets a fresh TradeTracker every day via the 9am PM2
+        restart, but algo-api (gunicorn) is long-running and never restarts
+        on its own - without this, current_date stays frozen at whatever day
+        the process last started, so sync_from_db() keeps re-fetching that
+        stale day's trades forever (confirmed live 2026-08-14: Friday's
+        Transaction History was still showing Thursday's trade). Called from
+        sync_from_db(), which every trade-history/summary endpoint hits
+        first - so the rollover happens on first request after midnight,
+        well before the 9:15 AM market open.
+        """
+        today = datetime.now().strftime("%Y-%m-%d")
+        if today != self.current_date:
+            logger.info(f"TradeTracker: rolling over from {self.current_date} to {today} - clearing transaction history")
+            self.trades = []
+            self.trade_counter = 0
+            self.current_date = today
+            self.trade_log_path = config.get_trade_log_path(self.current_date)
+
     def sync_from_db(self):
         """
         Sync trades from MongoDB to local memory.
         Crucial for API server which runs in a separate process.
         """
+        self._roll_to_today_if_needed()
+
         if not mongo_logger.enabled:
             return
-            
+
         try:
+            # Unconditional assignment (not `if db_trades:`) - an empty
+            # result for today must clear stale in-memory trades too,
+            # not just leave yesterday's list sitting there.
             db_trades = mongo_logger.get_trades_for_day(self.current_date)
-            if db_trades:
-                self.trades = db_trades
-                logger.info(f"Synced {len(self.trades)} trades from MongoDB")
+            self.trades = db_trades or []
+            logger.info(f"Synced {len(self.trades)} trades from MongoDB")
         except Exception as e:
             logger.error(f"Error syncing from DB: {str(e)}")
     
