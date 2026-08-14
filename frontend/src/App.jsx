@@ -1,25 +1,12 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Performance from './pages/Performance';
-import KiteTradingPage from './pages/KiteTradingPage';
 import Backtest from './pages/Backtest';
 import Scanner from './pages/Scanner';
 import './App.css';
 
 function AppContent() {
-  const location = useLocation();
-  const isKite = location.pathname === '/kite';
-
-  // Kite terminal renders full-screen without the Layout wrapper
-  if (isKite) {
-    return (
-      <Routes>
-        <Route path="/kite" element={<KiteTradingPage />} />
-      </Routes>
-    );
-  }
-
   return (
     <Layout>
       <Routes>

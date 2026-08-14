@@ -51,15 +51,6 @@ const Layout = ({ children }) => {
                             >
                                 Scanner
                             </Link>
-                            <Link
-                                to="/kite"
-                                className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors ${isActive('/kite')
-                                    ? 'bg-blue-50 text-blue-700'
-                                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                                    }`}
-                            >
-                                Kite Terminal
-                            </Link>
                         </div>
                     </div>
 

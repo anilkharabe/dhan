@@ -17,6 +17,19 @@ const NIFTY_INDEX_KEY = 'IDX_I|13';
 const SENSEX_INDEX_KEY = 'IDX_I|51';
 const SUPERTREND_TAG = 'SUPERTREND_CS';
 
+// Mirrors backend/config.py's NIFTY_TRADING_DAYS/SENSEX_TRADING_DAYS (Nifty:
+// Mon/Tue/Fri, Sensex: Wed/Thu) so the chart that loads by default is
+// whichever index is actually being traded today. Date.getDay() uses
+// Sun=0..Sat=6, unlike the backend's Mon=0..Sun=6 convention.
+const SENSEX_DEFAULT_JS_DAYS = [3, 4]; // Wed, Thu
+
+const getDefaultChart = () => {
+    const isSensexDay = SENSEX_DEFAULT_JS_DAYS.includes(new Date().getDay());
+    return isSensexDay
+        ? { type: 'INDEX', symbol: 'SENSEX', key: SENSEX_INDEX_KEY, strategyTag: null, tradeMarkers: null }
+        : { type: 'INDEX', symbol: 'NIFTY 50', key: NIFTY_INDEX_KEY, strategyTag: null, tradeMarkers: null };
+};
+
 // Builds the entry (sold)/exit (bought back) markers for whichever leg of a
 // trade was clicked - near/sold leg and far/hedge leg have opposite BUY/SELL
 // directions on both entry and exit (see TradeHistoryTable's event builder).
@@ -68,13 +81,7 @@ function Dashboard() {
 
     // Chart selection state
     const [selectedInstruments, setSelectedInstruments] = useState(null);
-    const [selectedChart, setSelectedChart] = useState({
-        type: 'INDEX',
-        symbol: 'NIFTY 50',
-        key: NIFTY_INDEX_KEY,
-        strategyTag: null,
-        tradeMarkers: null
-    });
+    const [selectedChart, setSelectedChart] = useState(getDefaultChart);
 
     // Extract instrument keys from positions for WebSocket subscription
     const wsInstrumentKeys = useMemo(() => {
