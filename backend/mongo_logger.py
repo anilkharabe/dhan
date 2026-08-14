@@ -351,6 +351,15 @@ class MongoDataLogger:
         state (like a trailing SL ratchet in order_manager.py) must be persisted
         here or the dashboard will keep showing the stale entry-time value.
 
+        Scoped to today's date - trade_id resets to 1, 2, 3... each day (see
+        TradeTracker.trade_counter), so without a date filter this could match
+        and silently overwrite a PRIOR day's BUY record sharing the same
+        trade_id instead of today's (confirmed live 2026-08-14: today's
+        trailing-SL updates for trade_id=1 landed on 2026-07-28's trade_id=1
+        document instead, so restore_state() after a restart re-read today's
+        still-pristine entry-time stop_loss_value and silently undid all of
+        today's trailing progress).
+
         Args:
             trade_id: Trade ID
             updates: Dictionary of fields to $set on the BUY record
@@ -359,8 +368,9 @@ class MongoDataLogger:
             return
 
         try:
+            today_str = datetime.now().strftime("%Y-%m-%d")
             result = self.trades.update_one(
-                {'trade_id': trade_id, 'action': 'BUY'},
+                {'trade_id': trade_id, 'action': 'BUY', 'date': today_str},
                 {'$set': updates}
             )
             if result.matched_count == 0:
