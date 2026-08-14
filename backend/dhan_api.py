@@ -647,6 +647,24 @@ class DhanWebSocketClient:
     def connect(self) -> bool:
         """Connect to Dhan's Live Market Feed (starts a background thread)"""
         self.last_connect_attempt = time.time()
+
+        # Tear down any existing feed/thread first. MarketFeed._run_async()
+        # retries connect() internally every ~2s forever once it starts
+        # failing (dhanhq library behavior, not ours) - without this, the
+        # old feed's thread is orphaned rather than stopped, so it keeps
+        # hammering Dhan's WS endpoint in the background on top of whatever
+        # new feed we create here. reconnect_if_needed() previously only
+        # did this cleanup when force=True, so every normal "connection
+        # dropped" reconnect leaked one more of these forever-retrying
+        # threads - confirmed live 2026-08-14: over an hour of continuous
+        # HTTP 429s that never cleared, consistent with several leaked
+        # threads independently re-hammering the rate limit.
+        if self.feed:
+            try:
+                self.feed.close_connection()
+            except Exception:
+                pass
+
         try:
             dhan_context = DhanContext(self.client_id, self.access_token)
 
