@@ -365,6 +365,7 @@ class AlgoTradingSystem:
                         nifty_ltp = dhan_client.get_ltp(config.NIFTY_INDEX_SYMBOL)
                         if nifty_ltp:
                             logger.info(f"📡 NIFTY Spot (REST Fallback): {nifty_ltp}")
+                            data_manager.relay_rest_price(config.NIFTY_INDEX_SYMBOL, nifty_ltp)
                     
                     if nifty_ltp:
                         # Calculate new strikes
@@ -423,6 +424,7 @@ class AlgoTradingSystem:
                          sensex_ltp = dhan_client.get_ltp(config.SENSEX_INDEX_SYMBOL)
                          if sensex_ltp:
                              logger.info(f"📡 SENSEX Spot (REST Fallback): {sensex_ltp}")
+                             data_manager.relay_rest_price(config.SENSEX_INDEX_SYMBOL, sensex_ltp)
                          
                      if sensex_ltp:
                         # Calculate new strikes

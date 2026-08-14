@@ -131,6 +131,30 @@ class DataManager:
         except Exception as e:
             pass
 
+    def relay_rest_price(self, instrument_key: str, price: float):
+        """
+        Relay a REST-fetched spot price to the dashboard as a synthetic tick.
+
+        Dhan's WebSocket feed doesn't appear to stream ticks for the raw
+        index instruments (IDX_I|13 Nifty, IDX_I|51 Sensex) at all - other
+        subscribed instruments (options/futures) tick fine over the same
+        connection, but the index itself never arrives, so
+        get_latest_price_from_websocket() for it always falls through to
+        REST (confirmed live 2026-08-14). Without this, the dashboard's
+        default index chart shows "LTP: Offline" forever regardless of feed
+        health, since _latest_ticks on the API server never gets an entry
+        for that key. Piggybacks on the same relay path as real WS ticks so
+        the frontend doesn't need to know the difference.
+        """
+        tick = {
+            'timestamp': datetime.now(),
+            'instrument_key': instrument_key,
+            'ltp': price,
+            'open': 0.0, 'high': 0.0, 'low': 0.0, 'close': 0.0,
+            'volume': 0, 'oi': 0,
+        }
+        self._on_tick_relay(tick)
+
     def get_latest_price_from_websocket(self, instrument_key: str, max_age_secs: float = 10.0) -> Optional[float]:
         """
         Get latest price from WebSocket tick buffer
