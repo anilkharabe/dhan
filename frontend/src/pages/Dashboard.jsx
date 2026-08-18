@@ -11,11 +11,12 @@ import TradeHistoryTable from '../components/TradeHistoryTable';
 import AdminControls from '../components/AdminControls';
 import TokenStatus from '../components/TokenStatus';
 import TokenExpiredModal from '../components/TokenExpiredModal';
+import StrikeSearch from '../components/StrikeSearch';
+import { getIntervalForStrategy, getStrategyMeta } from '../constants/strategies';
 import '../App.css';
 
 const NIFTY_INDEX_KEY = 'IDX_I|13';
 const SENSEX_INDEX_KEY = 'IDX_I|51';
-const SUPERTREND_TAG = 'SUPERTREND_CS';
 
 // Mirrors backend/config.py's NIFTY_TRADING_DAYS/SENSEX_TRADING_DAYS (Nifty:
 // Mon/Tue/Fri, Sensex: Wed/Thu) so the chart that loads by default is
@@ -28,6 +29,20 @@ const getDefaultChart = () => {
     return isSensexDay
         ? { type: 'INDEX', symbol: 'SENSEX', key: SENSEX_INDEX_KEY, strategyTag: null, tradeMarkers: null }
         : { type: 'INDEX', symbol: 'NIFTY 50', key: NIFTY_INDEX_KEY, strategyTag: null, tradeMarkers: null };
+};
+
+// Pulls the concise "PCR(full)=0.91 - aligned/neutral" reading back out of
+// entry_reason for the PCR-gated strategies, so the chart's entry marker
+// shows the confluence check that actually let the trade through (see
+// credit_a_pcr_strategy.py's _passes_pcr_filter, which builds that segment).
+// Only ever reflects an ALLOWED reading - a blocked signal never becomes a
+// trade, so there's no marker to attach a "blocked" note to.
+const extractPcrNote = (entryReason) => {
+    if (!entryReason) return null;
+    const withValue = entryReason.match(/PCR\(full\)=([\d.]+)[^|]*-\s*([^|]+)/);
+    if (withValue) return `PCR ${withValue[1]} (${withValue[2].trim()})`;
+    if (entryReason.includes('PCR unavailable')) return 'PCR N/A';
+    return null;
 };
 
 // Builds the entry (sold)/exit (bought back) markers for whichever leg of a
@@ -51,11 +66,15 @@ const buildTradeMarkers = (trade, instrumentKey) => {
     }
 
     const isSpread = !!trade.is_spread;
+    // Only the near/sold leg carries the PCR note - the PCR gate decides the
+    // overall CALL/PUT signal, not the hedge leg's own entry.
+    const pcrNote = getStrategyMeta(trade.strategy_tag).pcrGated ? extractPcrNote(trade.entry_reason) : null;
+    const baseEntryLabel = `${isSpread ? 'Sold' : 'Buy'} ₹${(trade.entry_price ?? 0).toFixed(2)}`;
     return {
         entryTime: trade.entry_time,
         entryPrice: trade.entry_price,
         entryAction: isSpread ? 'SELL' : 'BUY',
-        entryLabel: `${isSpread ? 'Sold' : 'Buy'} ₹${(trade.entry_price ?? 0).toFixed(2)}`,
+        entryLabel: pcrNote ? `${baseEntryLabel} · ${pcrNote}` : baseEntryLabel,
         exitTime: trade.exit_time,
         exitPrice: trade.exit_price,
         exitAction: isSpread ? 'BUY' : 'SELL',
@@ -446,6 +465,12 @@ function Dashboard() {
                     </div>
                 </div>
 
+                <div className="flex justify-end mb-3">
+                    <StrikeSearch
+                        onLoad={(chart) => setSelectedChart(chart)}
+                    />
+                </div>
+
                 {/* Find active position for the selected chart */
                     (() => {
                         // Only match the near/sold leg here - the entry/SL price lines
@@ -454,7 +479,7 @@ function Dashboard() {
                         const activePosition = positions.find(p => p.instrument_key === selectedChart.key);
                         const positionForStrategy = activePosition || positions.find(p => p.far_instrument_key === selectedChart.key);
                         const strategyTag = selectedChart.strategyTag || positionForStrategy?.strategy_tag || null;
-                        const interval = selectedChart.interval || (strategyTag === SUPERTREND_TAG ? '3minute' : '1minute');
+                        const interval = selectedChart.interval || getIntervalForStrategy(strategyTag);
                         return (
                             <CandlestickChart
                                 // Force re-mount when either the instrument or the strategy
@@ -494,7 +519,7 @@ function Dashboard() {
                         symbol: pos.symbol,
                         key: pos.instrument_key,
                         strategyTag,
-                        interval: strategyTag === SUPERTREND_TAG ? '3minute' : '1minute',
+                        interval: getIntervalForStrategy(strategyTag),
                         tradeMarkers: buildTradeMarkers(fullPosition, pos.instrument_key)
                     });
                 }}
@@ -511,7 +536,7 @@ function Dashboard() {
                             symbol: `${event.symbol} ${event.strike} ${event.type}`,
                             key: event.instrument_key,
                             strategyTag,
-                            interval: strategyTag === SUPERTREND_TAG ? '3minute' : '1minute',
+                            interval: getIntervalForStrategy(strategyTag),
                             tradeMarkers: buildTradeMarkers(event.sourceTrade, event.instrument_key)
                         });
                         // Scroll to chart

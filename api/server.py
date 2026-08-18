@@ -504,6 +504,85 @@ def calculate_oi_pcr(symbol: str, expiry_date: str) -> Optional[Dict[str, float]
     """
     return data_manager.calculate_oi_pcr(symbol, expiry_date)
 
+# ============================================================================
+# STRIKE SEARCH (dashboard chart's manual strike lookup)
+# ============================================================================
+
+def _symbol_search_config(symbol: str):
+    """(index_key, strike_interval, expiry_day) for NIFTY/SENSEX - the only
+    two symbols this system actually trades (see SYMBOLS in the strategy
+    modules), so strike search is deliberately scoped to just these two
+    rather than also covering BANKNIFTY (PCR-monitoring only, never traded)."""
+    if symbol == 'SENSEX':
+        return config.SENSEX_INDEX_SYMBOL, config.SENSEX_STRIKE_INTERVAL, config.SENSEX_EXPIRY_DAY
+    return config.NIFTY_INDEX_SYMBOL, config.NIFTY_STRIKE_INTERVAL, config.NIFTY_EXPIRY_DAY
+
+
+@app.route('/api/option-chain/search-meta', methods=['GET'])
+def get_option_search_meta():
+    """Spot price, ATM strike, strike interval, and current weekly expiry for
+    NIFTY/SENSEX - lets the dashboard's strike search default to something
+    sensible (ATM) instead of the user guessing a raw strike number blind."""
+    try:
+        symbol = request.args.get('symbol', 'NIFTY').upper()
+        if symbol not in ('NIFTY', 'SENSEX'):
+            return jsonify({"error": "symbol must be NIFTY or SENSEX"}), 400
+
+        index_key, strike_interval, expiry_day = _symbol_search_config(symbol)
+        spot = dhan_client.get_current_price(index_key)
+        expiry_date = data_manager.get_expiry_date(datetime.now(), expiry_day)
+        atm = round(spot / strike_interval) * strike_interval if spot else None
+
+        return jsonify({
+            "symbol": symbol,
+            "spot": spot,
+            "atm": atm,
+            "strike_interval": strike_interval,
+            "expiry_date": expiry_date,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/option-chain/resolve', methods=['GET'])
+def resolve_option_chain_instrument():
+    """Resolve symbol+strike+option_type(+expiry) into an instrument_key for
+    the dashboard chart's manual strike search - reuses dhan_client's own
+    scrip-master lookup (get_instrument_key), the same one every strategy
+    uses to place real orders, so a resolved key is guaranteed valid."""
+    try:
+        symbol = request.args.get('symbol', 'NIFTY').upper()
+        if symbol not in ('NIFTY', 'SENSEX'):
+            return jsonify({"error": "symbol must be NIFTY or SENSEX"}), 400
+
+        option_type = request.args.get('option_type', 'CE').upper()
+        if option_type not in ('CE', 'PE'):
+            return jsonify({"error": "option_type must be CE or PE"}), 400
+
+        try:
+            strike = int(float(request.args.get('strike')))
+        except (TypeError, ValueError):
+            return jsonify({"error": "strike must be a number"}), 400
+
+        _, _, expiry_day = _symbol_search_config(symbol)
+        expiry_date = request.args.get('expiry_date') or data_manager.get_expiry_date(datetime.now(), expiry_day)
+
+        instrument_key = dhan_client.get_instrument_key(
+            symbol=symbol, strike=strike, option_type=option_type, expiry_date=expiry_date
+        )
+        if not instrument_key:
+            return jsonify({"error": f"No {symbol} {strike} {option_type} contract found for expiry {expiry_date}"}), 404
+
+        return jsonify({
+            "instrument_key": instrument_key,
+            "symbol": symbol,
+            "strike": strike,
+            "option_type": option_type,
+            "expiry_date": expiry_date,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/profile', methods=['GET'])
 def get_profile():
     """Get the trading profile and status."""

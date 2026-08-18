@@ -130,6 +130,22 @@ export const apiService = {
 
   // Base URL helper (for SSE fetch in Backtest page)
   getBaseUrl: () => API_BASE_URL,
+
+  // ── Strike search (Live Chart) ────────────────────────────────────────
+
+  // Spot/ATM/expiry defaults for a symbol's strike search box
+  getOptionSearchMeta: async (symbol) => {
+    const response = await api.get('/api/option-chain/search-meta', { params: { symbol } });
+    return response.data;
+  },
+
+  // Resolve symbol+strike+option_type(+expiry) into an instrument_key
+  resolveOptionInstrument: async ({ symbol, strike, optionType, expiryDate }) => {
+    const response = await api.get('/api/option-chain/resolve', {
+      params: { symbol, strike, option_type: optionType, expiry_date: expiryDate },
+    });
+    return response.data;
+  },
 };
 
 export default apiService;

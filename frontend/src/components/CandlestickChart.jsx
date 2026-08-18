@@ -1,7 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
+import { getStrategyMeta } from '../constants/strategies';
 
-const SUPERTREND_TAG = 'SUPERTREND_CS';
+const formatIntervalLabel = (interval) => {
+    if (!interval) return null;
+    const match = String(interval).match(/^(\d+)/);
+    return match ? `${match[1]}m` : interval;
+};
 
 // Trade timestamps from the backend are IST wall-clock strings - either
 // "HH:MM:SS" for today (see /api/trades/history) or "YYYY-MM-DD HH:MM:SS"
@@ -44,7 +49,9 @@ const snapToCandle = (epoch, candles) => {
 };
 
 const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval = "1minute", activePosition, tradeMarkers = null, strategyTag = null }) => {
-    const isSupertrend = strategyTag === SUPERTREND_TAG;
+    const meta = getStrategyMeta(strategyTag);
+    const isSupertrend = !meta.indicators;
+    const intervalLabel = formatIntervalLabel(interval);
 
     const chartContainerRef = useRef(null);
     const chartRef = useRef(null);
@@ -486,9 +493,12 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
                         {symbol}
                     </h2>
                     <div className="flex flex-wrap gap-2">
-                        {isSupertrend ? (
-                            <span className="px-2 py-0.5 bg-teal-50 text-teal-700 rounded text-xs font-bold border border-teal-100">SUPERTREND (Trailing SL)</span>
-                        ) : (
+                        {meta.label && (
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold border ${meta.badgeClass}`}>
+                                {meta.label}{intervalLabel ? ` · ${intervalLabel}` : ''}
+                            </span>
+                        )}
+                        {!isSupertrend && (
                             <>
                                 <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs font-bold border border-blue-100">VWAP</span>
                                 <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs font-bold border border-purple-100">RSI</span>
@@ -498,6 +508,9 @@ const CandlestickChart = ({ instrumentKey, liveTick, symbol = "NIFTY", interval 
                                         <span className="px-2 py-0.5 bg-orange-50 text-orange-600 rounded text-xs font-bold border border-orange-100">OI</span>
                                         <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded text-xs font-bold border border-green-100">OI SMA</span>
                                     </>
+                                )}
+                                {meta.pcrGated && (
+                                    <span className="px-2 py-0.5 bg-fuchsia-50 text-fuchsia-600 rounded text-xs font-bold border border-fuchsia-100">PCR GATE</span>
                                 )}
                             </>
                         )}
