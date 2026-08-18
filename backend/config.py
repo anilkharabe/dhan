@@ -356,7 +356,17 @@ MAX_CACHE_AGE_MINUTES = 5
 # ============================================================================
 
 # Enable WebSocket for real-time tick data
-USE_WEBSOCKET = True  # Set to True to enable WebSocket (start with False for safety)
+# Temporarily disabled 2026-08-18: DhanWebSocketClient's underlying MarketFeed
+# entered its known internal retry-forever failure loop (see the connect()
+# docstring - confirmed dhanhq library behavior, not ours) and appears to have
+# gotten this account rate-limited/throttled on BOTH the WS endpoint and REST
+# intraday_minute_data calls from this process specifically (an isolated,
+# freshly-started script using the same token succeeded throughout). REST
+# fallback for LTP/candles is already hardened (see get_latest_price_from_websocket's
+# staleness check, fixed after the 2026-08-12 frozen-trailing-SL incident) so
+# trading can safely run WS-off while the retry-storm bug itself is fixed
+# properly later without time pressure. Re-enable once that's done.
+USE_WEBSOCKET = False
 WEBSOCKET_MODE = "full"  # Options: "ltpc", "full", "option_greeks", "full_d30"
 
 # Tick Aggregation
