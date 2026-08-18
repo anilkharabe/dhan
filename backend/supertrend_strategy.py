@@ -58,7 +58,7 @@ class SupertrendStrategy:
     def restore_state(self):
         try:
             if not os.path.exists(STATE_FILE):
-                logger.info("[Supertrend] No saved state found, starting fresh.")
+                logger.info("[Supertrend 3min] No saved state found, starting fresh.")
                 return
 
             with open(STATE_FILE, 'r') as f:
@@ -66,7 +66,7 @@ class SupertrendStrategy:
 
             saved_date = saved.get('date')
             if saved_date != datetime.now().strftime('%Y-%m-%d'):
-                logger.info(f"[Supertrend] Saved state is from {saved_date}, discarding (stale).")
+                logger.info(f"[Supertrend 3min] Saved state is from {saved_date}, discarding (stale).")
                 return
 
             self.positions = saved.get('positions', {s: None for s in SYMBOLS})
@@ -82,10 +82,10 @@ class SupertrendStrategy:
                     position['mongo_trade_id'] = MONGO_TRADE_ID_OFFSET + self._next_trade_id
                     self._next_trade_id += 1
 
-            logger.info(f"[Supertrend] Restored state: positions={self.positions}")
+            logger.info(f"[Supertrend 3min] Restored state: positions={self.positions}")
 
         except Exception as e:
-            logger.error(f"[Supertrend] Error restoring state: {str(e)}")
+            logger.error(f"[Supertrend 3min] Error restoring state: {str(e)}")
 
     def _persist_state(self):
         try:
@@ -96,12 +96,12 @@ class SupertrendStrategy:
                     'next_trade_id': self._next_trade_id,
                 }, f, default=str)
         except Exception as e:
-            logger.error(f"[Supertrend] Error persisting state: {str(e)}")
+            logger.error(f"[Supertrend 3min] Error persisting state: {str(e)}")
 
     def _handle_day_rollover(self):
         today = datetime.now().date()
         if today != self.current_date:
-            logger.info(f"[Supertrend] Day rollover {self.current_date} -> {today}.")
+            logger.info(f"[Supertrend 3min] Day rollover {self.current_date} -> {today}.")
             self.current_date = today
             self.last_processed_candle_ts = {s: None for s in SYMBOLS}
             self._persist_state()
@@ -218,18 +218,18 @@ class SupertrendStrategy:
             near_instrument_key = dhan_client.get_instrument_key(symbol, near_strike, near_type, expiry_date)
             far_instrument_key = dhan_client.get_instrument_key(symbol, far_strike, far_type, expiry_date)
             if not near_instrument_key or not far_instrument_key:
-                logger.warning(f"[Supertrend] Could not resolve instrument keys for {symbol} {near_strike}/{far_strike} {near_type}")
+                logger.warning(f"[Supertrend 3min] Could not resolve instrument keys for {symbol} {near_strike}/{far_strike} {near_type}")
                 return
 
             near_price = data_manager.get_live_price(near_instrument_key)
             far_price = data_manager.get_live_price(far_instrument_key)
             if near_price is None or far_price is None:
-                logger.warning(f"[Supertrend] Could not fetch leg prices for {symbol} {near_strike}/{far_strike}")
+                logger.warning(f"[Supertrend 3min] Could not fetch leg prices for {symbol} {near_strike}/{far_strike}")
                 return
 
             net_credit = near_price - far_price
             if net_credit <= 0:
-                logger.info(f"[Supertrend] {symbol} {near_strike}/{far_strike} non-positive net credit (₹{net_credit:.2f}), skipping.")
+                logger.info(f"[Supertrend 3min] {symbol} {near_strike}/{far_strike} non-positive net credit (₹{net_credit:.2f}), skipping.")
                 return
 
             sl_percent = self.get_sl_percent(symbol)
@@ -267,7 +267,7 @@ class SupertrendStrategy:
                 profit_target_value=profit_target_value,
             )
 
-            telegram_notifier.send_custom_message(f"📉 [PAPER] Supertrend {near_type} Opened - {symbol}", {
+            telegram_notifier.send_custom_message(f"📉 [PAPER] Supertrend 3min {near_type} Opened - {symbol}", {
                 "Sold": f"{near_type} {near_strike} @ ₹{near_price:.2f}",
                 "Hedge": f"{far_type} {far_strike} @ ₹{far_price:.2f}",
                 "Net Credit": f"₹{net_credit:.2f}",
@@ -275,10 +275,10 @@ class SupertrendStrategy:
                 "Stop Loss": f"₹{stop_loss_value:.2f} ({sl_percent}%)",
                 "Lots": lot_size,
             })
-            logger.info(f"✅ [Supertrend PAPER] Opened {symbol} {near_type} {near_strike}/{far_strike} | Net Credit: ₹{net_credit:.2f}")
+            logger.info(f"✅ [Supertrend 3min PAPER] Opened {symbol} {near_type} {near_strike}/{far_strike} | Net Credit: ₹{net_credit:.2f}")
 
         except Exception as e:
-            logger.error(f"[Supertrend] Error simulating entry for {symbol}: {str(e)}")
+            logger.error(f"[Supertrend 3min] Error simulating entry for {symbol}: {str(e)}")
 
     # ------------------------------------------------------------------
     # Exit checks
@@ -314,7 +314,7 @@ class SupertrendStrategy:
             return float(valid.iloc[-1]['supertrend'])
 
         except Exception as e:
-            logger.error(f"[Supertrend] Error fetching premium Supertrend for {symbol}: {str(e)}")
+            logger.error(f"[Supertrend 3min] Error fetching premium Supertrend for {symbol}: {str(e)}")
             return None
 
     def check_trailing_sl_and_target(self, symbol: str):
@@ -365,7 +365,7 @@ class SupertrendStrategy:
                     self.simulate_exit(symbol, "Profit Target")
 
         except Exception as e:
-            logger.error(f"[Supertrend] Error checking trailing SL/target for {symbol}: {str(e)}")
+            logger.error(f"[Supertrend 3min] Error checking trailing SL/target for {symbol}: {str(e)}")
 
     def simulate_exit(self, symbol: str, exit_reason: str):
         position = self.positions[symbol]
@@ -375,7 +375,7 @@ class SupertrendStrategy:
             near_exit_price = data_manager.get_latest_price_from_websocket(position['near_instrument_key']) or dhan_client.get_current_price(position['near_instrument_key'])
             far_exit_price = data_manager.get_latest_price_from_websocket(position['far_instrument_key']) or dhan_client.get_current_price(position['far_instrument_key'])
             if near_exit_price is None:
-                logger.warning(f"[Supertrend] Could not fetch near-leg exit price for {symbol}, skipping exit this tick.")
+                logger.warning(f"[Supertrend 3min] Could not fetch near-leg exit price for {symbol}, skipping exit this tick.")
                 return
             far_exit_price = far_exit_price or 0.0
 
@@ -394,20 +394,20 @@ class SupertrendStrategy:
                 net_credit=position['net_credit'],
             )
 
-            telegram_notifier.send_custom_message(f"📈 [PAPER] Supertrend {position['near_option_type']} Closed - {symbol}", {
+            telegram_notifier.send_custom_message(f"📈 [PAPER] Supertrend 3min {position['near_option_type']} Closed - {symbol}", {
                 "Reason": exit_reason,
                 "Net Credit Received": f"₹{position['net_credit']:.2f}",
                 "Cost to Close": f"₹{net_debit_to_close:.2f}",
                 "P&L": f"{'+' if pnl >= 0 else ''}₹{pnl:.2f}",
                 "Lots": position['lot_size'],
             })
-            logger.info(f"✅ [Supertrend PAPER] Closed {symbol} {position['near_option_type']} | P&L: {'+' if pnl >= 0 else ''}₹{pnl:.2f} | Reason: {exit_reason}")
+            logger.info(f"✅ [Supertrend 3min PAPER] Closed {symbol} {position['near_option_type']} | P&L: {'+' if pnl >= 0 else ''}₹{pnl:.2f} | Reason: {exit_reason}")
 
             self.positions[symbol] = None
             self._persist_state()
 
         except Exception as e:
-            logger.error(f"[Supertrend] Error simulating exit for {symbol}: {str(e)}")
+            logger.error(f"[Supertrend 3min] Error simulating exit for {symbol}: {str(e)}")
 
     def close_all_positions_eod(self):
         for symbol in SYMBOLS:

@@ -824,17 +824,21 @@ class DataManager:
         option_type: str,
         strike: int,
         expiry_date: str,
-        symbol: str = "NIFTY"
+        symbol: str = "NIFTY",
+        interval: str = None
     ) -> Optional[pd.DataFrame]:
         """
         Get option data with all indicators calculated
-        
+
         Args:
             option_type: "CE" or "PE"
             strike: Strike price
             expiry_date: Expiry date
             symbol: Index symbol ("NIFTY" or "SENSEX")
-        
+            interval: Candle interval (e.g. "1minute", "3minute"); defaults to
+                config.CANDLE_INTERVAL. Pass "3minute" to run the same signal
+                engine CREDIT_A uses on the isolated CREDIT_A_3MIN test strategy.
+
         Returns:
             DataFrame with OHLCV data and indicators
         """
@@ -851,13 +855,14 @@ class DataManager:
             # ALWAYS fetch fresh data from API for signal scanning
             # WebSocket cache is ONLY used for real-time stop-loss price checks, not for entry signals
             # This prevents serving stale prices when instruments aren't subscribed to WebSocket yet
-            df = self.get_combined_data(instrument_key, config.PREVIOUS_DAY_CANDLES)
-            
+            df = self.get_combined_data(instrument_key, config.PREVIOUS_DAY_CANDLES, interval=interval)
+
             if df is None or len(df) < config.SMA_OI_PERIOD:
                 candles_needed = config.SMA_OI_PERIOD
                 candles_have = len(df) if df is not None else 0
-                minutes_needed = (candles_needed - candles_have) * 3
-                
+                interval_minutes = int((interval or config.CANDLE_INTERVAL).replace("minute", "") or "1")
+                minutes_needed = (candles_needed - candles_have) * interval_minutes
+
                 logger.info(
                     f"⏳ Waiting for more data: {candles_have}/{candles_needed} candles "
                     f"(need {minutes_needed} more minutes)"

@@ -195,6 +195,74 @@ SUPERTREND_CS_CONFIG = {
     },
 }
 
+# ============================================================================
+# CREDIT_A 3-MIN VARIANT (isolated paper-trading test strategy)
+# ============================================================================
+# Same OI/VWAP/RSI/ADX signal engine and SL/target % as live CREDIT_A above -
+# just fed 3-minute option candles instead of CREDIT_A's live 1-minute ones,
+# to A/B test which timeframe performs better. Always paper-simulated
+# regardless of PAPER_TRADING, and never touches order_manager.active_positions
+# or trade_tracker - see backend/credit_a_3min_strategy.py. Enabled 2026-08-18
+# to start the multi-day paper-trading trial.
+CREDIT_A_3MIN_ENABLED = True
+
+CREDIT_A_3MIN_CANDLE_INTERVAL = "3minute"
+CREDIT_A_3MIN_TAG = "CREDIT_A_3MIN"
+
+# How often (seconds) to re-scan for a fresh signal when no position is open,
+# per symbol - matched to the candle interval itself (not faster) so an
+# unclosed 3-min candle isn't re-fetched from Dhan repeatedly. Kept deliberately
+# conservative given the 2026-08-18 Dhan rate-limit incident (see USE_WEBSOCKET
+# comment below) - this adds a second, independent stream of option-candle
+# fetches on top of CREDIT_A's existing 1-min ones.
+CREDIT_A_3MIN_SCAN_INTERVAL_SECONDS = 180
+
+# ============================================================================
+# CREDIT_A + PCR CONFLUENCE FILTER (isolated paper-trading test strategies)
+# ============================================================================
+# Two more isolated CREDIT_A variants (1-min and 3-min candles, same signal
+# engine as above) that additionally veto a signal directly contradicted by
+# chain-wide sentiment - the "normal dip/bounce inside a bigger trend" case
+# that produces false single-strike OI/VWAP/RSI signals (discussed 2026-08-18).
+# Full-chain PCR (data_manager.calculate_oi_pcr) already matches Upstox/NSE's
+# publicly displayed PCR - CALL-sell (bearish bet) is blocked if PCR shows a
+# bull market, PUT-sell (bullish bet) is blocked if PCR shows a bear market;
+# the neutral band and aligned trades still fire (lenient gate, per user
+# choice - not the stricter "must be confirmed" variant). See
+# backend/credit_a_pcr_strategy.py.
+CREDIT_A_PCR_1MIN_ENABLED = True
+CREDIT_A_PCR_3MIN_ENABLED = True
+
+CREDIT_A_PCR_1MIN_TAG = "CREDIT_A_PCR_1MIN"
+CREDIT_A_PCR_3MIN_TAG = "CREDIT_A_PCR_3MIN"
+
+CREDIT_A_PCR_1MIN_CANDLE_INTERVAL = "1minute"
+CREDIT_A_PCR_3MIN_CANDLE_INTERVAL = "3minute"
+
+# Re-scan cadence per symbol when no position is open - 1-min variant matches
+# CREDIT_A's own native cadence (CANDLE_INTERVAL_SECONDS); 3-min variant
+# matches CREDIT_A_3MIN_SCAN_INTERVAL_SECONDS's reasoning above.
+CREDIT_A_PCR_1MIN_SCAN_INTERVAL_SECONDS = 60
+CREDIT_A_PCR_3MIN_SCAN_INTERVAL_SECONDS = 180
+
+# Full-chain PCR thresholds (user-specified 2026-08-18): below this = bear
+# sentiment, above this = bull sentiment; the band between is neutral.
+CREDIT_A_PCR_BEAR_BELOW = 0.9
+CREDIT_A_PCR_BULL_ABOVE = 1.10
+
+# Rate-of-change safeguard (added 2026-08-18): catches PCR lagging a fast
+# price reversal - e.g. PCR at 0.6 (bear) recovering to 0.86 within an hour
+# after a gap-down still reads "bear" by the level check above, but a
+# CALL-sell (bearish bet) fired into that recovery would be exactly the kind
+# of stale/fake trade this filter exists to catch. Only engages in the
+# still-opposite-looking zone (CALL: PCR<CREDIT_A_PCR_BEAR_BELOW; PUT:
+# PCR>CREDIT_A_PCR_BULL_ABOVE) - see credit_a_pcr_strategy.py's
+# _passes_roc_filter. Starting values, not empirically calibrated yet -
+# revisit once the parallel run has a few days of PCR history to check
+# typical intraday swings against.
+CREDIT_A_PCR_ROC_LOOKBACK_MINUTES = 15
+CREDIT_A_PCR_ROC_THRESHOLD = 0.10
+
 
 # ============================================================================
 # DHAN API CREDENTIALS

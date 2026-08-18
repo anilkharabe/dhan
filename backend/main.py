@@ -18,6 +18,8 @@ from telegram_notifier import telegram_notifier
 from charts import chart_generator
 from mongo_logger import mongo_logger
 from supertrend_strategy import supertrend_strategy
+from credit_a_3min_strategy import credit_a_3min_strategy
+from credit_a_pcr_strategy import credit_a_pcr_1min_strategy, credit_a_pcr_3min_strategy
 
 # How long the WS client can sit flagged "connected" with no ticks for any
 # subscribed instrument before check_websocket_connection() force-reconnects
@@ -271,6 +273,24 @@ class AlgoTradingSystem:
             if config.SUPERTREND_CS_ENABLED:
                 logger.info("Restoring Supertrend test strategy state...")
                 supertrend_strategy.restore_state()
+
+            # CREDIT_A 3-min test strategy (isolated paper-trading, own state
+            # file - see credit_a_3min_strategy.py). Entirely separate from the
+            # restore above by design, so it can never interact with live
+            # CREDIT_A positions.
+            if config.CREDIT_A_3MIN_ENABLED:
+                logger.info("Restoring CREDIT_A 3-min test strategy state...")
+                credit_a_3min_strategy.restore_state()
+
+            # CREDIT_A + PCR confluence-filter test strategies (isolated
+            # paper-trading, own state files - see credit_a_pcr_strategy.py).
+            # Entirely separate from the restores above by design.
+            if config.CREDIT_A_PCR_1MIN_ENABLED:
+                logger.info("Restoring CREDIT_A PCR 1min test strategy state...")
+                credit_a_pcr_1min_strategy.restore_state()
+            if config.CREDIT_A_PCR_3MIN_ENABLED:
+                logger.info("Restoring CREDIT_A PCR 3min test strategy state...")
+                credit_a_pcr_3min_strategy.restore_state()
 
             return True
         
@@ -781,6 +801,71 @@ class AlgoTradingSystem:
             logger.error(f"Error in Supertrend EOD square-off: {str(e)}")
             telegram_notifier.send_error("Supertrend Strategy EOD", str(e))
 
+    def _credit_a_3min_tick(self):
+        """
+        Scheduled wrapper around the isolated CREDIT_A 3-min test strategy's
+        monitor loop - try/except'd the same way _supertrend_tick is, so a bug
+        in that module can never crash CREDIT_A's own jobs. Passes the
+        already-computed ATM strikes/expiry through (read-only) so this test
+        trades the same strikes live CREDIT_A does.
+        """
+        try:
+            credit_a_3min_strategy.monitor_tick(
+                nifty_enabled=self.nifty_enabled,
+                nifty_call_strike=self.nifty_call_strike,
+                nifty_put_strike=self.nifty_put_strike,
+                nifty_expiry_date=self.nifty_expiry_date,
+                sensex_enabled=self.sensex_enabled,
+                sensex_call_strike=self.sensex_call_strike,
+                sensex_put_strike=self.sensex_put_strike,
+                sensex_expiry_date=self.sensex_expiry_date,
+            )
+        except Exception as e:
+            logger.error(f"Error in CREDIT_A 3-min strategy tick: {str(e)}")
+            telegram_notifier.send_error("CREDIT_A 3-min Strategy Tick", str(e))
+
+    def _credit_a_3min_eod(self):
+        try:
+            credit_a_3min_strategy.close_all_positions_eod()
+        except Exception as e:
+            logger.error(f"Error in CREDIT_A 3-min EOD square-off: {str(e)}")
+            telegram_notifier.send_error("CREDIT_A 3-min Strategy EOD", str(e))
+
+    def _credit_a_pcr_tick(self, strategy_instance, label: str):
+        """
+        Shared scheduled wrapper for both CREDIT_A + PCR test instances -
+        try/except'd the same way the other test-strategy ticks are, so a bug
+        in either can never crash CREDIT_A's own jobs.
+        """
+        try:
+            strategy_instance.monitor_tick(
+                nifty_enabled=self.nifty_enabled,
+                nifty_call_strike=self.nifty_call_strike,
+                nifty_put_strike=self.nifty_put_strike,
+                nifty_expiry_date=self.nifty_expiry_date,
+                sensex_enabled=self.sensex_enabled,
+                sensex_call_strike=self.sensex_call_strike,
+                sensex_put_strike=self.sensex_put_strike,
+                sensex_expiry_date=self.sensex_expiry_date,
+            )
+        except Exception as e:
+            logger.error(f"Error in {label} strategy tick: {str(e)}")
+            telegram_notifier.send_error(f"{label} Strategy Tick", str(e))
+
+    def _credit_a_pcr_1min_eod(self):
+        try:
+            credit_a_pcr_1min_strategy.close_all_positions_eod()
+        except Exception as e:
+            logger.error(f"Error in CREDIT_A PCR 1min EOD square-off: {str(e)}")
+            telegram_notifier.send_error("CREDIT_A PCR 1min Strategy EOD", str(e))
+
+    def _credit_a_pcr_3min_eod(self):
+        try:
+            credit_a_pcr_3min_strategy.close_all_positions_eod()
+        except Exception as e:
+            logger.error(f"Error in CREDIT_A PCR 3min EOD square-off: {str(e)}")
+            telegram_notifier.send_error("CREDIT_A PCR 3min Strategy EOD", str(e))
+
     def end_of_day_routine(self):
         """End of day routine - close positions and generate reports"""
         try:
@@ -999,7 +1084,30 @@ class AlgoTradingSystem:
                 schedule.every(20).seconds.do(self._supertrend_tick)
                 eod_time_st = config.TRADING_END_TIME.strftime("%H:%M")
                 schedule.every().day.at(eod_time_st).do(self._supertrend_eod)
-                logger.info("📈 Supertrend test strategy scheduled (paper-trading only)")
+                logger.info("📈 Supertrend 3min test strategy scheduled (paper-trading only)")
+
+            # 8. CREDIT_A 3-min test strategy (isolated paper-trading) - only
+            # if enabled. Entry scans are internally throttled to once per
+            # CREDIT_A_3MIN_SCAN_INTERVAL_SECONDS per symbol (see
+            # credit_a_3min_strategy.py), so a 30s tick keeps SL/target checks
+            # responsive without over-fetching candles.
+            if config.CREDIT_A_3MIN_ENABLED:
+                schedule.every(30).seconds.do(self._credit_a_3min_tick)
+                eod_time_c3 = config.TRADING_END_TIME.strftime("%H:%M")
+                schedule.every().day.at(eod_time_c3).do(self._credit_a_3min_eod)
+                logger.info("📈 CREDIT_A 3-min test strategy scheduled (paper-trading only)")
+
+            # 9. CREDIT_A + PCR confluence-filter test strategies (isolated
+            # paper-trading) - same throttled-scan design as CREDIT_A_3MIN.
+            eod_time_pcr = config.TRADING_END_TIME.strftime("%H:%M")
+            if config.CREDIT_A_PCR_1MIN_ENABLED:
+                schedule.every(30).seconds.do(self._credit_a_pcr_tick, credit_a_pcr_1min_strategy, "CREDIT_A PCR 1min")
+                schedule.every().day.at(eod_time_pcr).do(self._credit_a_pcr_1min_eod)
+                logger.info("📈 CREDIT_A PCR 1min test strategy scheduled (paper-trading only)")
+            if config.CREDIT_A_PCR_3MIN_ENABLED:
+                schedule.every(30).seconds.do(self._credit_a_pcr_tick, credit_a_pcr_3min_strategy, "CREDIT_A PCR 3min")
+                schedule.every().day.at(eod_time_pcr).do(self._credit_a_pcr_3min_eod)
+                logger.info("📈 CREDIT_A PCR 3min test strategy scheduled (paper-trading only)")
 
             # Main loop
             while self.running:
