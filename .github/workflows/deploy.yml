@@ -108,6 +108,16 @@ jobs:
             -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no \
             -r frontend/dist/* ubuntu@${{ env.INSTANCE_ID }}:~/algo/frontend/dist/
 
+      # Second frontend mirror, served straight from S3 (static website hosting,
+      # plain HTTP - matches the EC2 frontend's http://65.2.228.173 API origin,
+      # so no mixed-content issues). Independent of the EC2/nginx copy above;
+      # either can go down without affecting the other.
+      - name: Deploy frontend build to S3
+        if: steps.changes.outputs.frontend == 'true'
+        continue-on-error: true  # independent mirror - a hiccup here shouldn't fail the EC2 deploy
+        run: |
+          aws s3 sync frontend/dist s3://algo-trading-dashboard-474939504163 --delete
+
       # Only restart the trading engine/API when backend code actually
       # changed - a frontend-only deploy needs no restart (nginx just
       # serves the new dist/), and every restart forces algo-backend to
@@ -132,4 +142,5 @@ jobs:
             fi
             sleep 5
           done
-          curl -sf -o /dev/null http://65.2.228.173/ && echo "Frontend OK" || (echo "::error::Frontend health check failed" && exit 1)
+          curl -sf -o /dev/null http://65.2.228.173/ && echo "Frontend (EC2) OK" || (echo "::error::Frontend (EC2) health check failed" && exit 1)
+          curl -sf -o /dev/null http://algo-trading-dashboard-474939504163.s3-website.ap-south-1.amazonaws.com/ && echo "Frontend (S3) OK" || (echo "::error::Frontend (S3) health check failed" && exit 1)
