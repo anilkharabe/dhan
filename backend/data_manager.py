@@ -734,39 +734,22 @@ class DataManager:
                 logger.info(f"DEMO MODE: Generating mock candle data for {instrument_key}")
                 return self._generate_mock_data(num_candles=30)
 
-            # 1. Fetch current day candles (Intraday)
+            # Fetch current day candles (Intraday). A previous-days fetch used
+            # to run right after this one, but V3 never returns anything for
+            # it (see docstring) - it was a guaranteed-empty API call fired
+            # back-to-back with this one, which risks tripping Dhan's DH-904
+            # rate limit (every other get_historical_data caller in this file
+            # waits config.CANDLE_FETCH_RATE_LIMIT_SECS between calls for the
+            # same reason) and, if it did, could take this call's retry down
+            # with it - leaving the chart with no history to show at all.
             curr_df = self.fetch_current_day_candles(instrument_key, interval=interval)
 
-            # 2. Fetch previous days' data (Historical)
-            # Calculate start date for history (e.g., 5 days ago)
-            from_date = (datetime.now() - timedelta(days=previous_day_candles + 2)).strftime('%Y-%m-%d')
-            to_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-
-            hist_df = dhan_client.get_historical_data(
-                instrument_key=instrument_key,
-                interval=interval,
-                from_date=from_date,
-                to_date=to_date
-            )
-
-            # 3. Combine Data
-            if hist_df is not None and not hist_df.empty:
-                if curr_df is not None and not curr_df.empty:
-                    # Combine and remove duplicates
-                    combined_df = pd.concat([hist_df, curr_df])
-                    combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
-                    combined_df.sort_index(inplace=True)
-                    return combined_df
-                else:
-                    return hist_df
-            
-            # Fallback if no history
             if curr_df is None or len(curr_df) == 0:
                 logger.warning(f"No data available for {instrument_key}")
                 return None
-            
+
             return curr_df
-        
+
         except Exception as e:
             logger.error(f"Error getting data: {str(e)}")
             return None
