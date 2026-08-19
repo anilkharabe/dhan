@@ -6,7 +6,6 @@ Coordinates all modules and executes the trading strategy
 import time as time_module
 import schedule
 from datetime import datetime, timedelta, time
-import sys
 
 import config
 import logger
@@ -982,7 +981,7 @@ class AlgoTradingSystem:
             # Outside market hours there are two distinct dead windows, and
             # they need different handling - a bare `.time() > TRADING_END_TIME`
             # check wraps incorrectly at midnight (00:00:01 is NOT > 15:25:00),
-            # so a PM2 restart landing any time after the EOD sys.exit(0) and
+            # so a PM2 restart landing any time after the EOD process exit and
             # before the next 09:15 open would otherwise fall all the way
             # through into initialize()'s live Dhan token-validation API call.
             if not config.TEST_MODE:
@@ -1291,15 +1290,26 @@ class AlgoTradingSystem:
     def stop(self):
         """Stop the trading system"""
         logger.info("Stopping trading system...")
-        
+
         self.running = False
-        
+
         # Send stop notification
         telegram_notifier.send_system_stop()
-        
+
         logger.logger.system_stop()
-        
-        sys.exit(0)
+
+        # No sys.exit() here - this can run from inside schedule.run_pending()
+        # (e.g. end_of_day_routine, which fires at the same "15:25" tick as
+        # the other strategies' own EOD close jobs - _supertrend_eod,
+        # _credit_a_3min_eod, _credit_a_pcr_1min_eod, _credit_a_pcr_3min_eod).
+        # schedule sorts same-time jobs by registration order and runs them
+        # synchronously in one run_pending() call, so an immediate sys.exit()
+        # here used to kill the process before those later jobs got their
+        # turn, leaving their positions open for _reconcile_orphaned_positions
+        # to force-close on the next start. Just flipping self.running lets
+        # run_pending() finish the current batch; the main loop in start()
+        # then exits naturally on its next check, and the process ends the
+        # same way (exit code 0) once main() returns.
 
 
 def main():
