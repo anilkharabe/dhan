@@ -17,6 +17,7 @@ backend/charts/
 backend/trade_logs/
 backend/dhan_instruments_cache.csv
 backend/.dhan_token_timestamp
+backend/*_state.json
 system_state.json
 *.log
 
