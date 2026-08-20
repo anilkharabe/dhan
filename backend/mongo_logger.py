@@ -756,17 +756,20 @@ class MongoDataLogger:
     
     def get_max_trade_id(self) -> int:
         """
-        Get the maximum trade ID used today by CREDIT_A specifically - this only
-        exists to let TradeTracker's plain 1,2,3... counter resume correctly after
-        a same-day restart (see main.py's "Sync Trade ID counter" call).
+        Get the maximum trade ID used today by CREDIT_A_1MIN specifically - this
+        only exists to let TradeTracker's plain 1,2,3... counter resume correctly
+        after a same-day restart (see main.py's "Sync Trade ID counter" call).
 
-        Must stay scoped to strategy_tag='CREDIT_A': the isolated paper-trading
-        strategies (SUPERTREND_CS, CREDIT_A_PCR_1MIN/3MIN, CREDIT_A_3MIN) each log
-        into this same collection under their own fixed, non-overlapping ID bands
+        Must stay scoped to strategy_tag='CREDIT_A_1MIN' (renamed from 'CREDIT_A'
+        2026-08-20 for naming consistency with the other candle-interval variants
+        - historical trades before the rename still carry the old tag, see
+        credit_spread_strategy memory): the isolated paper-trading strategies
+        (SUPERTREND_CS, CREDIT_A_PCR_1MIN/3MIN, CREDIT_A_3MIN) each log into this
+        same collection under their own fixed, non-overlapping ID bands
         (600M/700M/800M/900M - see their MONGO_TRADE_ID_OFFSET constants). An
-        unscoped query here would seed CREDIT_A's counter from one of those bands
-        instead of its own, and CREDIT_A's counter would then collide with that
-        strategy's IDs for the rest of the day - update_trade_state()'s
+        unscoped query here would seed CREDIT_A_1MIN's counter from one of those
+        bands instead of its own, and CREDIT_A_1MIN's counter would then collide
+        with that strategy's IDs for the rest of the day - update_trade_state()'s
         {trade_id, action, date} filter isn't unique enough to tell the two
         strategies' trades apart, so whichever one's trailing-SL update lands
         second silently overwrites the other's stop_loss_value in Mongo (confirmed
@@ -782,9 +785,9 @@ class MongoDataLogger:
         try:
             today = datetime.now().date().isoformat()
 
-            # Find max trade_id for today, CREDIT_A's own trades only (see above)
+            # Find max trade_id for today, CREDIT_A_1MIN's own trades only (see above)
             result = self.trades.find_one(
-                {'date': today, 'strategy_tag': 'CREDIT_A'},
+                {'date': today, 'strategy_tag': 'CREDIT_A_1MIN'},
                 sort=[('trade_id', -1)]
             )
 

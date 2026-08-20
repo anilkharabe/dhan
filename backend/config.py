@@ -154,8 +154,8 @@ CREDIT_SPREAD_PROFIT_TARGET_PERCENT = 90
 # Kept as a dict (not a single flat config) so main.py's existing
 # `for strat_tag, strat_conf in strategies.items()` loop pattern is reused unchanged.
 CREDIT_SPREAD_STRATEGIES = {
-    "CREDIT_A": {
-        "name": "Credit Spread",
+    "CREDIT_A_1MIN": {
+        "name": "Credit Spread 1min",
         "enabled": True,
         "sl_percent": CREDIT_SPREAD_SL_PERCENT,
         "profit_target_percent": CREDIT_SPREAD_PROFIT_TARGET_PERCENT,

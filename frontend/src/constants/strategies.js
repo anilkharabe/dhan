@@ -9,8 +9,8 @@
  */
 
 export const STRATEGY_META = {
-  STRATEGY_A: {
-    label: 'CREDIT_A',
+  CREDIT_A_1MIN: {
+    label: 'CREDIT_A 1MIN',
     interval: '1minute',
     badgeClass: 'bg-blue-50 text-blue-700 border-blue-100',
     indicators: true,
