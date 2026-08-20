@@ -622,6 +622,24 @@ def get_profile():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def _get_live_price(instrument_key: str) -> Optional[float]:
+    """Live price for a leg: prefer the in-memory WS tick cache (already
+    streaming via _broadcast_tick, no extra Dhan call) over a blocking REST
+    LTP call. Dhan's ticker_data endpoint intermittently fails on rapid
+    back-to-back calls, and /api/current-positions used to fire two of those
+    per spread position sequentially - with several open positions that
+    routinely pushed the request past the frontend's 10s timeout while still
+    returning null prices. Falls back to the REST call only when the tick
+    cache has nothing yet (e.g. instrument not subscribed on the WS feed)."""
+    if not instrument_key:
+        return None
+    with _latest_ticks_lock:
+        tick = _latest_ticks.get(instrument_key)
+    if tick and tick.get('ltp'):
+        return float(tick['ltp'])
+    return dhan_client.get_current_price(instrument_key)
+
+
 @app.route('/api/current-positions', methods=['GET'])
 def get_current_positions():
     """Get all current open positions"""
@@ -642,8 +660,8 @@ def get_current_positions():
                 time_str = f"{hours}h {minutes}m"
 
             if pos.get('is_spread'):
-                near_price = dhan_client.get_current_price(pos['instrument_key']) if pos.get('instrument_key') else None
-                far_price = dhan_client.get_current_price(pos['far_instrument_key']) if pos.get('far_instrument_key') else None
+                near_price = _get_live_price(pos['instrument_key']) if pos.get('instrument_key') else None
+                far_price = _get_live_price(pos['far_instrument_key']) if pos.get('far_instrument_key') else None
                 net_credit = pos.get('net_credit', 0) or 0
                 net_spread_value = (near_price - far_price) if (near_price is not None and far_price is not None) else None
                 pnl = ((net_credit - net_spread_value) * lot_size) if net_spread_value is not None else None
@@ -682,7 +700,7 @@ def get_current_positions():
             # Get current price if instrument_key is available
             current_price = None
             if pos.get('instrument_key'):
-                current_price = dhan_client.get_current_price(pos['instrument_key'])
+                current_price = _get_live_price(pos['instrument_key'])
 
             # Calculate P&L
             entry_price = pos.get('entry_price', 0)
